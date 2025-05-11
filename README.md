@@ -63,7 +63,18 @@ Python実行環境がインストールされていないMacでも利用でき�
 
 ### 1. 開発環境のセットアップ
 
-*   Python 3.8以上を推奨。
+*   Python 3.8以上を推奨。(例: Python 3.9.x を推奨します。)
+*   (推奨) 開発時には、プロジェクト固有の環境分離のため、仮想環境の利用を推奨します。
+    *   `venv` を利用する場合:
+        ```bash
+        python3 -m venv venv
+        source venv/bin/activate
+        ```
+    *   `conda` を利用する場合 (別途インストールが必要):
+        ```bash
+        conda create -n oak_webcam_env python=3.9
+        conda activate oak_webcam_env
+        ```
 *   必要なライブラリをインストール:
     ```bash
     pip install -r requirements.txt

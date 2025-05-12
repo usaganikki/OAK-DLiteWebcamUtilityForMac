@@ -1,0 +1,49 @@
+# PyInstaller
+dist/
+build/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env/
+.conda/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+# READMEに記載されているログディレクトリ
+/Users/usagani/Library/Logs/OakWebcamApp/
+
+# ref directory
+/ref/
+
+# Dependencies (if not managed by package manager)
+# requirements.txt
+
+# Configuration files
+# *.ini
+# *.cfg
+# *.conf
+
+# Environment variables file
+# .env
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+
+# OS generated files
+ehthumbs.db
+Thumbs.db

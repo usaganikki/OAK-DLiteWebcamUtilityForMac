@@ -133,18 +133,25 @@ python src/menu_bar_app.py
             ```bash
             pip install pyinstaller
             ```
-    *   **ビルド手順**:
-        *   プロジェクトのルートディレクトリで以下のコマンドを実行します。
+    *   **`uvc_runner` のビルド (単一実行ファイル)**:
+        *   `src/uvc_handler.py` を `uvc_runner` という名前の単一実行ファイルとしてビルドするには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
             ```bash
             bash build_scripts/build_uvc_runner.sh
             ```
-        *   ビルドが成功すると、`dist` ディレクトリ内に `uvc_runner` という名前の実行可能ファイルが作成されます。
-    *   **ビルドされた実行ファイルの実行**:
-        *   以下のコマンドで実行できます。
+        *   ビルドが成功すると、プロジェクトルート直下の `dist/` ディレクトリ内に `uvc_runner` が作成されます。
+        *   このプロセス中に、`build_scripts/` ディレクトリに `uvc_runner.spec` という設定ファイルが、プロジェクトルート直下の `build/` ディレクトリに一時的な作業ファイルが生成されます。
+        *   **`.spec` ファイルについて**: このファイルはPyInstallerがビルド設定を管理するために使用します。通常は自動生成された内容で十分ですが、依存関係の追加、除外するモジュールの指定、隠しインポートの解決など、より詳細なビルドのカスタマイズが必要な場合に手動で編集することができます。
+        *   ビルドされた `uvc_runner` は、`python src/uvc_handler.py` と同様にコマンドライン引数を受け付けます。例えば、`./dist/uvc_runner -l` のように実行できます。
+
+    *   **`OakWebcamApp.app` のビルド (macOSアプリケーションバンドル)**:
+        *   `src/menu_bar_app.py` を `OakWebcamApp.app` というmacOSアプリケーションバンドルとしてビルドするには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
             ```bash
-            ./dist/uvc_runner
+            bash build_scripts/build_app.sh
             ```
-        *   この実行可能ファイルは、引数なしで `python src/uvc_handler.py` を実行するのと同じように動作します。つまり、実行中はOAK-D LiteがWebカメラとして機能します。高度なオプション（`-f`, `-fb`, `-l`など）を使用したい場合は、実行可能ファイルにそれらの引数を渡してください。例: `./dist/uvc_runner -l`
+        *   このスクリプトは、まず内部的に `build_scripts/build_uvc_runner.sh` を実行して `uvc_runner` をビルドします。
+        *   次に、PyInstallerを使用して `OakWebcamApp.app` を作成します。この際、事前にビルドされた `uvc_runner` と、`src/uvc_handler.py` スクリプト自体もアプリケーションバンドル内に同梱されます。
+        *   ビルドプロセス中に `OakWebcamApp.spec` のような `.spec` ファイルが生成され、これも必要に応じてカスタマイズ可能です。
+        *   ビルドが成功すると、`OakWebcamApp.app` はPyInstallerによって一時的に `dist/` ディレクトリに作成された後、最終的に `build_scripts/app/` ディレクトリに移動されます。
 
 3.  **スクリプトの直接実行**:
     *   **基本的なUVCデバイスとしての実行 (推奨される主な使用方法)**:

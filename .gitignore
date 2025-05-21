@@ -28,6 +28,7 @@ logs/
 
 # ref directory
 /ref/
+/app/
 
 # Dependencies (if not managed by package manager)
 # requirements.txt

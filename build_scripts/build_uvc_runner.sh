@@ -8,7 +8,7 @@ set -e
 # Project root directory (assuming this script is in build_scripts)
 PROJECT_ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 SRC_DIR="$PROJECT_ROOT_DIR/src"
-OUTPUT_DIR="$PROJECT_ROOT_DIR/dist"
+OUTPUT_DIR="$PROJECT_ROOT_DIR/dist" # Changed from dist to build
 SCRIPT_NAME="uvc_handler.py"
 EXECUTABLE_NAME="uvc_runner"
 

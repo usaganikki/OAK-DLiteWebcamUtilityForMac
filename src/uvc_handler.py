@@ -164,6 +164,7 @@ def main():
     parser.add_argument('-fb', '--flash-bootloader', default=False, action="store_true")
     parser.add_argument('-f',  '--flash-app',        default=False, action="store_true")
     parser.add_argument('-l',  '--load-and-exit',    default=False, action="store_true")
+    parser.add_argument('--start-uvc', default=False, action="store_true", help="Start UVC camera mode (for menu bar app)")
     args = parser.parse_args()
 
     if args.flash_bootloader and args.flash_app:
@@ -177,9 +178,17 @@ def main():
         handle_flash_app()
     elif args.load_and_exit:
         handle_load_and_exit()
-    else:
-        # パラメータなしの場合
+    elif args.start_uvc:
         run_uvc_device()
+    else:
+        # デフォルトの動作（引数なし、または他のフラグが指定されていない場合）
+        # ここでは、引数なしの場合も run_uvc_device() を呼ぶか、
+        # 何もしないか（メニューバーからの起動専用とするか）を選択できる。
+        # 既存の挙動を維持するため、run_uvc_device() を呼ぶ。
+        # ただし、メニューバーアプリからは必ず --start-uvc をつける想定。
+        if not any(vars(args).values()): # いずれのフラグもFalseの場合
+            run_uvc_device()
+        # 他のフラグが指定されている場合は、その処理のみ実行される
 
 if __name__ == "__main__":
     main()

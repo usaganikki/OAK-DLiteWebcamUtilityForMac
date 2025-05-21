@@ -1,78 +1,117 @@
 import rumps
-import depthai as dai
-from src.uvc_handler import UVCCamera, getMinimalPipeline # Assuming uvc_handler is in src
+import subprocess
 import os
+import signal
+import sys
 
 # Ensure the script can find uvc_handler if it's not installed as a package
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# This might not be strictly necessary if running from the project root
+# and src is a package, but can help in some execution contexts.
+# However, for subprocess calls, the path to uvc_handler.py needs to be correct.
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
 class MenuBarApp(rumps.App):
     def __init__(self):
-        super(MenuBarApp, self).__init__("OAK-D UVC", title="OAK-D") # Name for the app, title for the menu bar
-
-        # Configure UVCCamera
-        device_config = dai.Device.Config()
-        # These UVC settings are similar to those in uvc_handler.py's run_uvc_device
-        # They might be overridden by the pipeline's own BoardConfig if not set carefully.
-        # However, UVCCamera class expects a device_config.
-        device_config.board.uvc = dai.BoardConfig.UVC(1920, 1080)
-        device_config.board.uvc.frameType = dai.ImgFrame.Type.NV12
-        # The cameraName in pipeline's BoardConfig will likely take precedence for the UVC device name.
-
-        self.camera = UVCCamera(pipeline_func=getMinimalPipeline, device_config=device_config)
+        super(MenuBarApp, self).__init__("OAK-D UVC", title="OAK-D", quit_button=None)
+        self.uvc_process = None  # To store the subprocess object
         self.camera_running = False
 
         self.start_button = rumps.MenuItem("Start Camera", callback=self.start_camera_action)
-        self.stop_button = rumps.MenuItem("Stop Camera", callback=None) # Initially disabled
-
+        self.stop_button = rumps.MenuItem("Stop Camera", callback=None)  # Initially disabled
         self.menu = [self.start_button, self.stop_button]
-        # rumps automatically adds a "Quit" button that calls rumps.quit_application
+        # rumps automatically adds a "Quit" button
 
     def start_camera_action(self, sender):
         if not self.camera_running:
             try:
-                self.camera.start()
-                self.camera_running = True
-                rumps.notification("OAK-D Camera", "Status", "Camera started successfully.")
-                # Update menu items
-                self.start_button.set_callback(None) # Disable Start
-                self.stop_button.set_callback(self.stop_camera_action) # Enable Stop
-            except Exception as e:
-                rumps.alert("Error starting camera", str(e))
-                # Ensure camera is considered stopped if start failed
-                if self.camera:
-                    self.camera.stop() # Attempt to clean up
-                self.camera_running = False
-                self.start_button.set_callback(self.start_camera_action) # Re-enable Start
-                self.stop_button.set_callback(None) # Keep Stop disabled
+                # Construct the path to uvc_handler.py relative to this script's location
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                script_path = os.path.join(current_dir, 'uvc_handler.py')
 
+                if not os.path.exists(script_path):
+                    rumps.alert("Error", f"uvc_handler.py not found at {script_path}")
+                    return
+
+                # Start uvc_handler.py as a subprocess
+                # Using python3 explicitly, ensure it's in PATH or provide full path
+                self.uvc_process = subprocess.Popen(['python3', script_path, '--start-uvc'])
+                self.camera_running = True
+                rumps.notification("OAK-D Camera", "Status", "Camera starting...")
+                self.start_button.set_callback(None)  # Disable Start
+                self.stop_button.set_callback(self.stop_camera_action)  # Enable Stop
+            except Exception as e:
+                rumps.alert("Error Starting Camera", str(e))
+                self.camera_running = False
+                if self.uvc_process: # If process was created but failed
+                    try:
+                        self.uvc_process.terminate()
+                        self.uvc_process.wait(timeout=2) # Short wait
+                    except Exception:
+                        pass # Ignore errors during cleanup
+                self.uvc_process = None
+                self.start_button.set_callback(self.start_camera_action)  # Re-enable Start
+                self.stop_button.set_callback(None)  # Keep Stop disabled
 
     def stop_camera_action(self, sender):
-        if self.camera_running:
+        if self.camera_running and self.uvc_process:
             try:
-                self.camera.stop()
-                self.camera_running = False
+                print("Sending SIGINT to uvc_handler process...")
+                self.uvc_process.send_signal(signal.SIGINT)
+                self.uvc_process.wait(timeout=10)  # Wait for the process to terminate
                 rumps.notification("OAK-D Camera", "Status", "Camera stopped.")
-                # Update menu items
-                self.start_button.set_callback(self.start_camera_action) # Enable Start
-                self.stop_button.set_callback(None) # Disable Stop
+            except subprocess.TimeoutExpired:
+                rumps.alert("Stopping camera timed out. Forcing termination.")
+                print("uvc_handler process timed out. Terminating...")
+                self.uvc_process.terminate() # Force kill if it doesn't respond to SIGINT
+                try:
+                    self.uvc_process.wait(timeout=5) # Wait for terminate
+                except Exception as e_term:
+                    print(f"Error during forced termination: {e_term}")
             except Exception as e:
-                rumps.alert("Error stopping camera", str(e))
-                # Consider the state uncertain, but try to reflect UI for attempting another stop/start
-                self.start_button.set_callback(self.start_camera_action)
-                self.stop_button.set_callback(self.stop_camera_action) # Leave stop enabled if error
-
-
-    # rumps calls this method when the app is about to quit.
-    # This can be triggered by the default Quit button or programmatically.
-    def quit(self, sender=None):
-        if self.camera_running:
-            print("Stopping camera before quitting...")
-            self.camera.stop()
+                rumps.alert("Error Stopping Camera", str(e))
+                print(f"Error stopping camera: {e}")
+                # In case of error, still try to reflect that a stop was attempted.
+                # Consider if process might still be running or if it's safe to reset.
+            finally:
+                self.uvc_process = None
+                self.camera_running = False
+                self.start_button.set_callback(self.start_camera_action)  # Enable Start
+                self.stop_button.set_callback(None)  # Disable Stop
+        elif not self.uvc_process and self.camera_running:
+            # State inconsistency: running flag is true but no process
+            rumps.alert("Camera State Inconsistent", "Resetting UI. Camera might still be running if started externally.")
             self.camera_running = False
-            print("Camera stopped.")
+            self.start_button.set_callback(self.start_camera_action)
+            self.stop_button.set_callback(None)
+
+
+    @rumps.clicked("Quit") # Handles the default Quit button
+    def quit_app(self, sender=None): # Renamed from quit to avoid conflict if rumps.App has a quit method
+        if self.camera_running and self.uvc_process:
+            print("Stopping camera before quitting...")
+            try:
+                self.uvc_process.send_signal(signal.SIGINT)
+                self.uvc_process.wait(timeout=10)
+                print("Camera stopped via subprocess.")
+            except subprocess.TimeoutExpired:
+                print("Timeout stopping camera on quit. Terminating...")
+                self.uvc_process.terminate()
+                try:
+                    self.uvc_process.wait(timeout=5)
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"Error stopping camera on quit: {e}")
+                if self.uvc_process: # If process still exists
+                    try:
+                        self.uvc_process.terminate()
+                        self.uvc_process.wait(timeout=2)
+                    except Exception:
+                        pass
+            finally:
+                self.uvc_process = None
+                self.camera_running = False
         rumps.quit_application()
 
 if __name__ == "__main__":

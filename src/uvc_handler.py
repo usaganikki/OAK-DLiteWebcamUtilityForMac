@@ -59,6 +59,36 @@ def getPipeline():
 
     return pipeline
 
+
+class UVCCamera:
+    def __init__(self, pipeline_func, device_config=None):
+        self.pipeline_func = pipeline_func
+        self.device_config = device_config
+        self.device = None
+        self.pipeline = None
+
+    def start(self):
+        self.pipeline = self.pipeline_func()
+        if self.device_config:
+            # If a device_config is provided, use it for device initialization
+            # This is typically used when specific UVC settings are needed before pipeline start
+            self.device = dai.Device(self.device_config)
+            self.device.startPipeline(self.pipeline)
+        else:
+            # If no device_config is provided, assume pipeline contains all config
+            # or we are using default device settings.
+            # This branch might need adjustment based on how dai.Device behaves
+            # when device_config is None but pipeline has board config.
+            # For run_uvc_device, we pass a config.
+            self.device = dai.Device()
+            self.device.startPipeline(self.pipeline)
+
+
+    def stop(self):
+        if self.device is not None and not self.device.isClosed():
+            self.device.close()
+            self.device = None
+
 # Will flash the bootloader if no pipeline is provided as argument
 def flash(pipeline=None):
     (f, bl) = dai.DeviceBootloader.getFirstAvailableDevice()
@@ -109,23 +139,25 @@ def handle_load_and_exit():
 def run_uvc_device():
     # Standard UVC load with depthai (オプションなしの場合)
     device_config_main = dai.Device.Config()
+    device_config_main = dai.Device.Config()
     device_config_main.board.uvc = dai.BoardConfig.UVC(1920, 1080)
     device_config_main.board.uvc.frameType = dai.ImgFrame.Type.NV12
 
-    # dai.Device に config を渡して初期化し、その後パイプラインを開始
-    with dai.Device(device_config_main) as device:
-        pipeline_to_run = getMinimalPipeline()
-        device.startPipeline(pipeline_to_run)
+    camera = UVCCamera(pipeline_func=getMinimalPipeline, device_config=device_config_main)
 
+    try:
+        camera.start()
         print("\nDevice started, please keep this process running")
         print("and open an UVC viewer to check the camera stream.")
         print("\nTo close: Ctrl+C")
 
         while True:
-            try:
-                time.sleep(0.1)
-            except KeyboardInterrupt:
-                break
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("Interrupted, stopping camera...")
+    finally:
+        camera.stop()
+        print("Camera stopped.")
 
 def main():
     parser = argparse.ArgumentParser()

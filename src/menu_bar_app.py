@@ -3,6 +3,7 @@ import subprocess
 import os
 import signal
 import sys
+import depthai as dai
 
 # Ensure the script can find uvc_handler if it's not installed as a package
 # This might not be strictly necessary if running from the project root
@@ -16,11 +17,41 @@ class MenuBarApp(rumps.App):
         super(MenuBarApp, self).__init__("OAK-D UVC", title="OAK-D", quit_button=None)
         self.uvc_process = None  # To store the subprocess object
         self.camera_running = False
+        self.auto_start_enabled = False  # Initial state for auto-start
 
+        self.auto_start_menu_item = rumps.MenuItem("Auto-start on Connection", callback=self.toggle_auto_start)
+        self.auto_start_menu_item.state = self.auto_start_enabled
         self.start_button = rumps.MenuItem("Start Camera", callback=self.start_camera_action)
         self.stop_button = rumps.MenuItem("Stop Camera", callback=None)  # Initially disabled
-        self.menu = [self.start_button, self.stop_button]
+        self.menu = [self.auto_start_menu_item, rumps.separator, self.start_button, self.stop_button]
         # rumps automatically adds a "Quit" button
+
+        self.oak_device_connected = False
+        self.device_check_timer = rumps.Timer(self.check_device_connection, 3)
+        self.device_check_timer.start()
+
+    def check_device_connection(self, sender=None):
+        available_devices = dai.Device.getAllAvailableDevices()
+        current_device_is_connected = len(available_devices) > 0
+        previous_device_connected_state = self.oak_device_connected
+        self.oak_device_connected = current_device_is_connected
+
+        if current_device_is_connected and not previous_device_connected_state:
+            print("OAK-D device connected.")
+            if self.auto_start_enabled and not self.camera_running:
+                print("Auto-starting camera due to device connection.")
+                self.start_camera_action(None)
+        elif not current_device_is_connected and previous_device_connected_state:
+            print("OAK-D device disconnected.")
+            if self.auto_start_enabled and self.camera_running:
+                print("Auto-stopping camera due to device disconnection.")
+                self.stop_camera_action(None)
+
+    def toggle_auto_start(self, sender):
+        self.auto_start_enabled = not self.auto_start_enabled
+        sender.state = self.auto_start_enabled
+        # Optionally, print a message or log this change
+        print(f"Auto-start on connection toggled to: {self.auto_start_enabled}")
 
     def start_camera_action(self, sender):
         if not self.camera_running:
@@ -88,6 +119,10 @@ class MenuBarApp(rumps.App):
 
     @rumps.clicked("Quit") # Handles the default Quit button
     def quit_app(self, sender=None): # Renamed from quit to avoid conflict if rumps.App has a quit method
+        # Stop the timer when quitting
+        if hasattr(self, 'device_check_timer') and self.device_check_timer.is_alive():
+            self.device_check_timer.stop()
+
         if self.camera_running and self.uvc_process:
             print("Stopping camera before quitting...")
             try:

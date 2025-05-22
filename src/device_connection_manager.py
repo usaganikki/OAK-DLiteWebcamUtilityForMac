@@ -86,6 +86,24 @@ class DeviceConnectionManager:
             self.notify_ui_callback("OAK-D Auto Control", "Stopping Camera", "Auto mode disabled, stopping camera.")
             self.stop_camera_action()
 
+    def disconnect_camera_explicitly(self):
+        if self.camera_running and self.uvc_process:
+            original_auto_mode_status = self.auto_mode_enabled
+            if self.auto_mode_enabled:
+                self.auto_mode_enabled = False
+                self.update_menu_callback(False) # Update UI
+            
+            self.stop_camera_action() # This should set camera_running to False and uvc_process to None
+
+            # Notification message depends on whether auto_mode was disabled by this action
+            if original_auto_mode_status and not self.auto_mode_enabled:
+                message = "Camera has been disconnected. Auto-mode was active and has been disabled."
+            else:
+                message = "Camera has been disconnected."
+            self.notify_ui_callback("OAK-D Camera", "Disconnected", message)
+        else:
+            self.notify_ui_callback("OAK-D Camera", "Status", "Camera is not currently running or connected.")
+
     def start_camera_action(self):
         if not self.camera_running:
             try:

@@ -4,6 +4,7 @@ import time
 import argparse
 import os
 import depthai as dai
+# import sys # For sys.exit and potentially more detailed error info
 
 def getMinimalPipeline():
     pipeline = dai.Pipeline()
@@ -147,17 +148,33 @@ def run_uvc_device():
 
     try:
         camera.start()
-        print("\nDevice started, please keep this process running")
-        print("and open an UVC viewer to check the camera stream.")
-        print("\nTo close: Ctrl+C")
+        print("uvc_handler.py: Device started, please keep this process running") # Basic log
+        print("uvc_handler.py: and open an UVC viewer to check the camera stream.")
+        print("uvc_handler.py: To close: Ctrl+C")
 
         while True:
-            time.sleep(0.1)
+            time.sleep(0.1) # Simple loop, no diagnostic calls
+
     except KeyboardInterrupt:
-        print("Interrupted, stopping camera...")
+        print("uvc_handler.py: Interrupted by user (SIGINT).")
+    except RuntimeError as e:
+        print(f"uvc_handler.py: DepthAI runtime error: {e}") # Basic error log
+    except Exception as e:
+        print(f"uvc_handler.py: An unexpected error: {e}") # Basic error log
     finally:
-        camera.stop()
-        print("Camera stopped.")
+        print("uvc_handler.py: Reached finally block.")
+        print("uvc_handler.py: Attempting to stop camera...")
+        try:
+            if camera: # Simplified check
+                camera.stop() # Call the simplified stop
+                print("uvc_handler.py: camera.stop() called.")
+            else:
+                print("uvc_handler.py: Camera object is None.")
+        except Exception as e_stop:
+            print(f"uvc_handler.py: Error during camera.stop() in finally: {e_stop}")
+        
+        print("uvc_handler.py: Script finished.")
+        # No explicit sys.exit() here, let Python handle exit code based on unhandled exceptions or normal termination.
 
 def main():
     parser = argparse.ArgumentParser()

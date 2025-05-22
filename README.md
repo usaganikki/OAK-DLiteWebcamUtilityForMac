@@ -98,10 +98,68 @@ python src/menu_bar_app.py
 ### 主な機能
 
 *   **カメラの開始/停止**: メニューバーのアイコンから「Start Camera」または「Stop Camera」を選択することで、Webカメラ機能を有効化/無効化できます。
+*   **デバイス接続監視と自動起動**:
+    *   OAK-D LiteのUSB接続状態を監視します。
+    *   「Auto-start on Connection」メニュー項目をオンにすると、デバイス接続時にカメラが自動的に起動し、切断時に自動的に停止します。
 *   **アプリケーションの終了**: メニューバーから「Quit」を選択してアプリケーションを安全に終了できます。カメラが動作中の場合は自動的に停止されます。
-*   **通知**: カメラの開始時、停止時、またはエラー発生時にmacOSの通知センターを通じてフィードバックが表示されます。
+*   **通知**: カメラの開始/停止時、デバイスの接続/切断時、自動起動設定の変更時、またはエラー発生時にmacOSの通知センターを通じてフィードバックが表示されます。
 
-このメニューバーアプリケーションは、`src/uvc_handler.py` スクリプトをサブプロセスとして起動・停止することでカメラを制御します。これにより、カメラ制御ロジックとGUIアプリケーションが分離され、安定性が向上しています。
+このメニューバーアプリケーションは、`src/uvc_handler.py` スクリプトをサブプロセスとして起動・停止することでカメラを制御します。また、`depthai` ライブラリを使用してUSBデバイスの接続状態を監視します。これにより、カメラ制御ロジックとGUIアプリケーションが分離され、安定性が向上しています。
+
+### 状態遷移 (メニューバーアプリケーション)
+
+メニューバーアプリケーションにおけるカメラプロセスの主な状態と遷移は以下の通りです。
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Camera_Process_Inactive
+
+    state Camera_Process_Inactive {
+        [*] --> Camera_Off
+        state Camera_Off {
+            description Camera Off (camera_running = false)
+        }
+    }
+
+    state Camera_Process_Active {
+        [*] --> Camera_On
+        state Camera_On {
+            description Camera On (camera_running = true)
+        }
+    }
+
+    Camera_Process_Inactive --> Camera_Process_Active : User clicks 'Start Camera'
+    Camera_Process_Inactive --> Camera_Process_Active : OAK-D Device Connected, Auto-start Enabled
+
+    Camera_Process_Active --> Camera_Process_Inactive : User clicks 'Stop Camera'
+    Camera_Process_Active --> Camera_Process_Inactive : OAK-D Device Disconnected, Auto-start Enabled
+    Camera_Process_Active --> Camera_Process_Inactive : User clicks 'Quit' (App Shutdown)
+
+    note left of Camera_Process_Inactive
+        The Auto-start on Connection setting
+        (Enabled/Disabled) and the actual
+        OAK-D device connection status
+        (Connected/Disconnected) act as
+        conditions that gate some of these
+        state transitions.
+    end note
+```
+
+**図の説明:**
+
+*   **`Camera_Process_Inactive`**: カメラプロセスが動作していない状態です (`camera_running`が`false`)。アプリケーション起動時の初期状態です。
+*   **`Camera_Process_Active`**: カメラプロセスが動作している状態です (`camera_running`が`true`)。
+
+**主な遷移:**
+
+*   **`Camera_Process_Inactive` から `Camera_Process_Active` へ:**
+    *   ユーザーがメニューから「Start Camera」をクリックする。
+    *   OAK-DデバイスがUSB接続され、かつ「Auto-start on Connection」メニューが有効になっている場合。
+*   **`Camera_Process_Active` から `Camera_Process_Inactive` へ:**
+    *   ユーザーがメニューから「Stop Camera」をクリックする。
+    *   OAK-DデバイスがUSB切断され、かつ「Auto-start on Connection」メニューが有効になっている場合。
+    *   ユーザーがアプリケーションを「Quit」する。
 
 ## システム構成 (参考)
 
@@ -179,6 +237,7 @@ python src/menu_bar_app.py
 *   **`depthai` のバージョン**: UVC機能は比較的新しい機能のため、`depthai` のバージョンによって動作が異なる場合があります。`requirements.txt` で指定されたバージョンを使用することを推奨します。
 *   **デバイスの認識**: スクリプト実行前にOAK-D LiteがPCに正しく接続され、認識されていることを確認してください。
 *   **フラッシュ書き込み**: ブートローダーやアプリケーションパイプラインの書き込みは、デバイスの動作に影響を与える可能性があるため、慎重に行ってください。書き込み後は、指示に従いデバイスの電源を再投入してください。
+*   **カメラ起動中の物理的な切断**: カメラが起動している最中にOAK-D LiteのUSBケーブルを物理的に抜いた場合、アプリケーションがカメラの停止を自動的に検知できないことがあります。この場合、メニューから手動でカメラを停止するか、アプリケーションを再起動する必要がある場合があります。この挙動は現在のバージョンではサポート外となります。
 
 ## 今後の改善点 (TODO)
 

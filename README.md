@@ -16,6 +16,7 @@ This utility allows you to leverage the powerful image processing capabilities o
 *   **Simple Menu Bar Operation**: Intuitively control webcam start/stop, auto-start settings, etc., from the app icon résident in the macOS menu bar.
 *   **Automatic Control on Device Connection/Disconnection**: Detects USB connection/disconnection of the OAK-D Lite and can automatically start or stop the webcam function.
 *   **Stable Operation**: Manages the `uvc_handler.py` script as a subprocess, separating the GUI application from the camera control logic for stable performance.
+*   **Efficient USB Device Detection (macOS)**: Utilizes macOS's native IOKit framework for USB device detection (specifically for OAK-D Lite). This event-driven approach replaces the previous polling mechanism, resulting in lower CPU usage, faster response times for connection/disconnection events, and increased reliability. (Note: This advanced USB detection is specific to macOS due to IOKit.)
 *   **Flexible Pipeline Configuration (Advanced)**: In addition to the default 1080p setting, pipelines対応した to multiple resolution settings, such as downscaling from 4K or 720p, are available (currently requires script editing for customization).
 *   **Device Flashing (Advanced)**:
     *   Write specific webcam settings (application pipeline) to the OAK-D Lite's flash memory for persistence.
@@ -51,6 +52,10 @@ source venv/bin/activate  # macOS / Linux
 pip install -r requirements.txt
 ```
 `requirements.txt` includes `depthai` (core library) for OAK-D Lite control, `depthai-sdk` (provides additional features), `rumps` (GUI control) for the menu bar app, `pyinstaller` for application bundling, and other necessary libraries.
+
+**Additional Dependencies (for macOS users)**:
+
+*   `pyobjc`: This library is required for the native IOKit integration on macOS, which enables efficient monitoring of USB device events. It is included in `requirements.txt` and will be installed as part of the `pip install -r requirements.txt` command. If you encounter issues or are installing manually, you can typically install it via: `pip install pyobjc`
 
 ### 3. Launch the Menu Bar Application (Recommended)
 

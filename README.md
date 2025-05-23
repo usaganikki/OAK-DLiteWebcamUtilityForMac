@@ -1,251 +1,284 @@
 # OAK-D Lite Webcam Utility for Mac
 
-## 概要
+[![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+[![macOS](https://img.shields.io/badge/macOS-10.15%2B-lightgrey.svg)](https://www.apple.com/macos)
 
-このプロジェクトは、Luxonis社のOAK-D LiteカメラをmacOS上で手軽に高性能なWebカメラとして利用するためのユーティリティです。
-**基本的な使い方として、`src/uvc_handler.py` スクリプトを実行している間のみ、OAK-D LiteがWebカメラとして認識されます。**
-その他、デバイスのブートローダーやアプリケーションパイプラインの書き換え、UVCデバイスとして初期化した後にスクリプトを終了する高度なオプションも提供します。
-また、macOSのメニューバーからカメラ機能を制御するためのGUIアプリケーションも同梱しています。
+This document is also available in [Japanese](./README_JP.md).
 
-## 主な機能
+OAK-D Lite Webcam Utility for Mac is a utility software designed to easily use Luxonis's OAK-D Lite camera as a high-performance webcam on macOS.
 
-*   **一時的なWebカメラ化 (デフォルト)**: `src/uvc_handler.py` スクリプトを実行している間、OAK-D LiteのカラーカメラをUVC (USB Video Class) デバイスとして動作させ、Mac標準のWebカメラとして利用可能にします。これが本ユーティリティの主な使用方法です。
-*   **パイプライン設定**: 4K解像度からのダウンスケールや720pなど、複数の解像度設定に対応したパイプラインを提供します。
-*   **デバイスへの書き込み (高度なオプション)**:
-    *   ブートローダーの書き換え (`-fb` オプション)
-    *   アプリケーションパイプラインの書き換え (`-f` オプション)
-*   **スタンドアロン動作 (高度なオプション)**: UVC初期化後にスクリプトを終了し、デバイス単体でWebカメラとして動作させる機能 (`-l` オプション) を提供します。
+This utility allows you to leverage the powerful image processing capabilities of the OAK-D Lite to use high-quality video as a Mac webcam in various applications (video conferencing, live streaming, etc.).
 
-## `src/uvc_handler.py` の詳細
+## 🌟 Key Features
 
-`src/uvc_handler.py` は、OAK-D LiteをUVCデバイスとして制御するためのコアスクリプトです。
-**コマンドライン引数なしで実行するのが標準的な使用方法で、スクリプト実行中のみWebカメラとして機能します。**
-その他、特定の目的のための高度なコマンドライン引数も用意されています。
+*   **Easy Webcam Conversion**: Simply connect your OAK-D Lite and run the bundled menu bar app or command-line script to start using it as a webcam without any special configuration.
+*   **Simple Menu Bar Operation**: Intuitively control webcam start/stop, auto-start settings, etc., from the app icon résident in the macOS menu bar.
+*   **Automatic Control on Device Connection/Disconnection**: Detects USB connection/disconnection of the OAK-D Lite and can automatically start or stop the webcam function.
+*   **Stable Operation**: Manages the `uvc_handler.py` script as a subprocess, separating the GUI application from the camera control logic for stable performance.
+*   **Flexible Pipeline Configuration (Advanced)**: In addition to the default 1080p setting, pipelines対応した to multiple resolution settings, such as downscaling from 4K or 720p, are available (currently requires script editing for customization).
+*   **Device Flashing (Advanced)**:
+    *   Write specific webcam settings (application pipeline) to the OAK-D Lite's flash memory for persistence.
+    *   Provides a bootloader flashing feature for maintenance purposes.
+*   **Standalone Operation (Advanced)**: Allows the script to exit after UVC initialization, enabling the device to operate as a webcam fatores.
 
-### コマンドラインオプション
+## 💻 System Requirements
 
-*   **引数なし (デフォルト)**:
-    *   スクリプトを実行すると、接続されているOAK-D Liteが一時的にUVCデバイスとして動作します。スクリプト実行中のみWebカメラとして利用可能です。これが最も一般的な使用方法です。
+*   **OS**: macOS Catalina (10.15) or later
+*   **Hardware**:
+    *   Luxonis OAK-D Lite camera
+    *   USB 3.0 Type-C port (for OAK-D Lite connection)
+*   **Software**: Python 3.8 or later
 
-以下のオプションは、特定の高度な操作を行うためのものです。
+## 🚀 Installation and Launch
 
-*   **`-fb` または `--flash-bootloader`**:
-    *   OAK-D Liteデバイスのブートローダーを書き換えます。
-    *   **使用ケース**: Luxonisから新しいブートローダーが提供された場合や、ブートローダーの破損が疑われる場合。
-    *   **注意点**: デバイスの動作に深刻な影響を与える可能性があるため、慎重に実行してください。書き換え後はデバイスの電源を再投入する必要があります。
+### 1. Clone the Repository
 
-*   **`-f` または `--flash-app`**:
-    *   スクリプト内の `getMinimalPipeline()` で定義されたUVCカメラ設定（アプリケーションパイプライン）をデバイスのフラッシュメモリに書き込みます。
-    *   **使用ケース**: OAK-D LiteをPC接続時に常に特定のWebカメラ設定で永続的に使用したい場合。
-    *   **注意点**: 既存のアプリケーションパイプラインは上書きされます。書き換え後はデバイスの電源を再投入する必要があります。
+First, clone this repository to your local machine:
+```bash
+git clone https://github.com/usaganikki/OAK-DLiteWebcamUtilityForMac.git
+cd OAK-DLiteWebcamUtilityForMac
+```
 
-*   **`-l` または `--load-and-exit`**:
-    *   OAK-D LiteをUVCデバイスとして初期化した後、スクリプトを終了します。デバイスのウォッチドッグタイマーが無効化され、ホストPCからの通信なしに動作し続けます。
-    *   **使用ケース**: スクリプトを常駐させずにWebカメラ機能を利用したいが、デバイス設定を永続化したくない場合。
-    *   **注意点**: 再度DepthAIライブラリ経由でデバイスに接続する場合、電源の再投入が必要になることがあります。
-*   **`--start-uvc`**:
-    *   UVCカメラモードを起動します。このオプションは主に `src/menu_bar_app.py` から内部的に使用されることを想定しています。
-    *   コマンドラインから直接このオプションを使用することも可能ですが、その場合はCtrl+Cでプロセスを終了する必要があります。
+### 2. Install Dependencies
 
+Install the required Python libraries. Using a virtual environment is recommended.
+```bash
+python3 -m venv venv
+source venv/bin/activate  # macOS / Linux
+# venv\Scripts\activate  # Windows (for reference)
 
-### 主要な関数
+pip install -r requirements.txt
+```
+`requirements.txt` includes `depthai` (core library) for OAK-D Lite control, `depthai-sdk` (provides additional features), `rumps` (GUI control) for the menu bar app, `pyinstaller` for application bundling, and other necessary libraries.
 
-*   **`getMinimalPipeline()`**:
-    *   1080p解像度、NV12フォーマットの基本的なUVCパイプラインを構築して返します。FPSは30に設定されます。
-    *   カメラ名は "MinimalUVCCam\_1080p" となります。
+### 3. Launch the Menu Bar Application (Recommended)
 
-*   **`getPipeline()`**:
-    *   より高度な設定が可能なUVCパイプラインを構築します。
-    *   `enable_4k` フラグにより、4K解像度から1080pへのダウンスケール、または720p解像度を選択できます。
-    *   カメラ名は "FlashedCam\_1080p\_NV12" となります。
-
-*   **`flash(pipeline=None)`**:
-    *   デバイスのブートローダーまたは指定されたパイプラインをフラッシュメモリに書き込みます。
-    *   `pipeline`引数が `None` の場合はブートローダーを、パイプラインオブジェクトが渡された場合はそのパイプラインを書き込みます。
-    *   書き込みの進捗状況を表示します。
-
-*   **`handle_flash_bootloader()`**:
-    *   `-fb` オプションが指定された場合に呼び出され、`flash()` 関数を使ってブートローダーを書き込みます。
-
-*   **`handle_flash_app()`**:
-    *   `-f` オプションが指定された場合に呼び出され、`flash(getMinimalPipeline)` を実行して、`getMinimalPipeline` で定義された設定をデバイスに書き込みます。
-
-*   **`handle_load_and_exit()`**:
-    *   `-l` オプションが指定された場合に呼び出されます。
-    *   環境変数 `DEPTHAI_WATCHDOG` を "0" に設定してウォッチドッグを無効化します。
-    *   `getPipeline()` で定義されたパイプラインでデバイスを初期化し、その後スクリプトプロセスを終了させます。
-
-*   **`run_uvc_device()`**:
-    *   コマンドライン引数なし、または `--start-uvc` オプションでスクリプトが実行された場合に呼び出されます。
-    *   `getMinimalPipeline()` で定義されたパイプラインを使用してデバイスをUVCモードで起動し、スクリプトが実行されている間、Webカメラとして機能させます。Ctrl+Cで終了します。
-
-*   **`main()`**:
-    *   コマンドライン引数を解析し、対応するハンドラ関数（`handle_flash_bootloader`, `handle_flash_app`, `handle_load_and_exit`）または `run_uvc_device()` (`--start-uvc` や引数なしの場合) を呼び出します。
-    *   `-fb` と `-f` オプションの同時指定はエラーとして扱います。
-
-## macOS Menu Bar Application (`src/menu_bar_app.py`)
-
-このプロジェクトには、macOSのメニューバーからOAK-D LiteのWebカメラ機能を制御するためのGUIアプリケーションが含まれています。
-
-### 実行方法
-
-以下のコマンドでメニューバーアプリケーションを起動します:
+Launch the menu bar application with the following command:
 ```bash
 python src/menu_bar_app.py
 ```
-**注意**: このアプリケーションはmacOS専用であり、`rumps` ライブラリに依存しています。事前に `pip install -r requirements.txt` で `rumps` をインストールしておく必要があります。
+When launched, the application will appear in the macOS menu bar as "OAK-D UVC" (or "OAK-D" when hovering over the icon), displaying the OAK-D Lite icon.
+Click this icon to control the camera and change settings.
+If the OAK-D Lite is already connected when the application starts and "Enable Auto Camera Control" is on (default), the camera will start automatically.
 
-### 主な機能
+**Note on First Launch:**
+macOS security settings may block the application from running. If this happens, go to "System Preferences" > "Security & Privacy" > "General" tab and allow the application to run.
 
-*   **カメラの開始/停止**: メニューバーのアイコンから「Start Camera」または「Stop Camera」を選択することで、Webカメラ機能を有効化/無効化できます。
-*   **デバイス接続監視と自動起動**:
-    *   OAK-D LiteのUSB接続状態を監視します。
-    *   「Auto-start on Connection」メニュー項目をオンにすると、デバイス接続時にカメラが自動的に起動し、切断時に自動的に停止します。
-*   **アプリケーションの終了**: メニューバーから「Quit」を選択してアプリケーションを安全に終了できます。カメラが動作中の場合は自動的に停止されます。
-*   **通知**: カメラの開始/停止時、デバイスの接続/切断時、自動起動設定の変更時、またはエラー発生時にmacOSの通知センターを通じてフィードバックが表示されます。
+### 4. Direct Execution from Command Line (Advanced Operations/Debugging)
 
-このメニューバーアプリケーションは、`src/uvc_handler.py` スクリプトをサブプロセスとして起動・停止することでカメラを制御します。また、`depthai` ライブラリを使用してUSBデバイスの接続状態を監視します。これにより、カメラ制御ロジックとGUIアプリケーションが分離され、安定性が向上しています。
+You can also run the `src/uvc_handler.py` script directly:
+```bash
+python src/uvc_handler.py
+```
+With this method, the OAK-D Lite will function as a webcam only while the script is running.
+Refer to the "`src/uvc_handler.py` Details" section below for more information.
 
-### 状態遷移 (メニューバーアプリケーション)
+## 👇 Usage
 
-メニューバーアプリケーションにおけるカメラプロセスの主な状態と遷移は以下の通りです。
+### Menu Bar Application
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> Camera_Process_Inactive
+1.  **Launch**: Start the menu bar application as described in the "Installation and Launch" section. The application icon, labeled "OAK-D UVC" (or showing "OAK-D" as a tooltip), will appear in the menu bar.
+2.  **Camera Control**:
+    *   **Enable/Disable Auto Control**: Select "Enable Auto Camera Control" from the menu to enable (checked) or disable (unchecked) automatic camera start/stop based on OAK-D Lite's USB connection status. Enabled by default.
+        *   When enabled: The camera starts automatically when the device is connected and stops when disconnected.
+        *   When disabled: The camera will not start/stop automatically regardless of the device's connection status.
+    *   **Manual Camera Stop (Disconnect)**: Select "Disconnect Camera" from the menu to stop the currently running camera. This action may temporarily disable "Enable Auto Camera Control" (it can be re-enabled).
+    *   **Starting the Camera**: There is no explicit "Start Camera" menu item. To start the camera, connect the OAK-D Lite while "Enable Auto Camera Control" is active, or enable "Enable Auto Camera Control" if the device is already connected.
+    *   Notifications: Feedback on camera status changes and setting modifications will be displayed through the macOS Notification Center.
+3.  **Quit Application**: Select "Quit" to close the application. If the camera is running, it will be stopped automatically.
 
-    state Camera_Process_Inactive {
-        [*] --> Camera_Off
-        state Camera_Off {
-            description Camera Off (camera_running = false)
-        }
-    }
+### Using as a Webcam
 
-    state Camera_Process_Active {
-        [*] --> Camera_On
-        state Camera_On {
-            description Camera On (camera_running = true)
-        }
-    }
+Once the camera is started, the OAK-D Lite will be recognized as a standard webcam on your Mac.
+You can select it in most applications that use a webcam, such as Zoom, Google Meet, OBS Studio, QuickTime Player, etc. It will typically appear under a name like "OAK-D Lite UVC Camera."
 
-    Camera_Process_Inactive --> Camera_Process_Active : User clicks 'Start Camera'
-    Camera_Process_Inactive --> Camera_Process_Active : OAK-D Device Connected, Auto-start Enabled
+## 🛠️ `src/uvc_handler.py` Details (Command Line)
 
-    Camera_Process_Active --> Camera_Process_Inactive : User clicks 'Stop Camera'
-    Camera_Process_Active --> Camera_Process_Inactive : OAK-D Device Disconnected, Auto-start Enabled
-    Camera_Process_Active --> Camera_Process_Inactive : User clicks 'Quit' (App Shutdown)
+`src/uvc_handler.py` is the core script for controlling the OAK-D Lite as a UVC device.
+The menu bar application internally calls this script to manage the camera.
+Developers or users who want to perform advanced operations can use this script directly from the command line.
 
-    note left of Camera_Process_Inactive
-        The Auto-start on Connection setting
-        (Enabled/Disabled) and the actual
-        OAK-D device connection status
-        (Connected/Disconnected) act as
-        conditions that gate some of these
-        state transitions.
-    end note
+**Basic Usage (Temporary Webcam Mode):**
+```bash
+python src/uvc_handler.py
+```
+Running this command will make the OAK-D Lite available as a webcam only as long as the script is running. Exiting the script (Ctrl+C) will stop the webcam function.
+
+### Command Line Options
+
+The following options are for specific advanced operations:
+
+*   **`-fb` or `--flash-bootloader`**:
+    *   Flashes the bootloader of the OAK-D Lite device.
+    *   **Use Case**: When a new bootloader is provided by Luxonis, or if bootloader corruption is suspected.
+    *   **Caution**: Execute with care as it can severely affect device operation. A power cycle is required after flashing.
+
+*   **`-f` or `--flash-app`**:
+    *   Writes the UVC camera settings (application pipeline) defined in `getMinimalPipeline()` within the script to the device's flash memory.
+    *   **Use Case**: If you want the OAK-D Lite to permanently use specific webcam settings when connected to a PC.
+    *   **Caution**: Overwrites the existing application pipeline. A power cycle is required after flashing.
+
+*   **`-l` or `--load-and-exit`**:
+    *   Initializes the OAK-D Lite as a UVC device and then exits the script. The device's watchdog timer is disabled, allowing it to continue operating without communication from the host PC.
+    *   **Use Case**: If you want to use the webcam function without keeping the script running, but do not want to persist settings to the device.
+    *   **Caution**: A power cycle may be required to reconnect to the device via the DepthAI library.
+
+*   **`--start-uvc`**:
+    *   Starts UVC camera mode. This option is primarily intended for internal use by `src/menu_bar_app.py`.
+    *   It can also be used directly from the command line, but the process must then be terminated with Ctrl+C.
+
+### Key Functions (uvc_handler.py)
+
+*   **`getMinimalPipeline()`**: Constructs a basic UVC pipeline with 1080p resolution, NV12 format, and 30 FPS. Camera name is "MinimalUVCCam\_1080p".
+*   **`getPipeline()`**: Constructs a more advanced UVC pipeline. Currently returns a pipeline that downscales from 4K resolution to 1080p (the `enable_4k` flag is fixed to `True` in the code). Camera name is "FlashedCam\_1080p\_NV12".
+*   **`flash(pipeline=None)`**: Flashes the bootloader or a specified pipeline to the device's flash memory.
+*   **`handle_flash_bootloader()`**: Handles the `-fb` option.
+*   **`handle_flash_app()`**: Handles the `-f` option.
+*   **`handle_load_and_exit()`**: Handles the `-l` option.
+*   **`run_uvc_device()`**: Handles UVC mode activation when no arguments or the `--start-uvc` option is provided.
+*   **`main()`**: Parses command-line arguments and calls the corresponding handler functions.
+
+## ⚙️ For Developers
+
+### Project Structure
+
+```
+OAK-DLiteWebcamUtilityForMac/
+├── .github/                    # GitHub related files (Issue templates, etc.)
+│   └── ISSUE_TEMPLATE/
+│       ├── bug_report.md
+│       └── feature_request.md
+├── build_scripts/              # Build scripts directory
+│   ├── build_app.sh            # Script to build macOS .app bundle
+│   ├── build_uvc_runner.sh     # Script to build uvc_handler.py standalone executable
+│   └── app/                    # Final destination for the .app bundle (after build)
+├── dist/                       # PyInstaller build output directory (after build)
+├── doc/                        # Documentation
+│   ├── development_roadmap.md  # Development roadmap
+│   └── uvc_handler_description.md # Detailed description of uvc_handler.py (Older, main content merged to README. Consider archiving/deleting)
+├── src/                        # Source code
+│   ├── menu_bar_app.py         # macOS menu bar application
+│   ├── uvc_handler.py          # OAK-D Lite UVC control core script
+│   └── device_connection_manager.py # Device connection/disconnection monitoring class
+├── .gitignore
+├── LICENSE                     # MIT License file
+├── README.md                   # This file (English)
+├── README_JP.md                # Japanese version of README
+└── requirements.txt            # Python dependency list
 ```
 
-**図の説明:**
+### Setup
 
-*   **`Camera_Process_Inactive`**: カメラプロセスが動作していない状態です (`camera_running`が`false`)。アプリケーション起動時の初期状態です。
-*   **`Camera_Process_Active`**: カメラプロセスが動作している状態です (`camera_running`が`true`)。
+1.  **Development Environment**:
+    *   Python 3.8 or higher is recommended.
+    *   Using a virtual environment (e.g., `venv`) is strongly recommended.
+2.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    For development, consider installing additional libraries for debugging and type checking (e.g., `pylint`, `mypy`).
 
-**主な遷移:**
+### Build Instructions
 
-*   **`Camera_Process_Inactive` から `Camera_Process_Active` へ:**
-    *   ユーザーがメニューから「Start Camera」をクリックする。
-    *   OAK-DデバイスがUSB接続され、かつ「Auto-start on Connection」メニューが有効になっている場合。
-*   **`Camera_Process_Active` から `Camera_Process_Inactive` へ:**
-    *   ユーザーがメニューから「Stop Camera」をクリックする。
-    *   OAK-DデバイスがUSB切断され、かつ「Auto-start on Connection」メニューが有効になっている場合。
-    *   ユーザーがアプリケーションを「Quit」する。
+This project uses `PyInstaller` to build executables.
+Ensure `PyInstaller` is installed beforehand:
+```bash
+pip install pyinstaller
+```
 
-## システム構成 (参考)
+#### 1. Build `uvc_runner` (Standalone Executable)
 
-(このセクションは元のREADMEから流用・調整可能です。プロジェクトの進捗に合わせて更新してください。)
+Builds `src/uvc_handler.py` into a single executable named `uvc_runner`.
+This executable is used internally by the menu bar application (`OakWebcamApp.app`).
 
-## 技術要素
+Run the following command in the project root directory:
+```bash
+bash build_scripts/build_uvc_runner.sh
+```
+Upon successful build, `uvc_runner` will be created in the `dist/` directory.
+Build settings can be customized in `build_scripts/uvc_runner.spec` (may be generated on first build or created manually).
 
-*   **プログラミング言語**: Python 3.x
-*   **主要ライブラリ**:
-    *   `depthai`: OAK-D Liteの制御、UVC (USB Video Class) 化機能の利用。
-    *   標準ライブラリ: `time`, `argparse`, `os`, `signal`, `subprocess` など。
+#### 2. Build `OakWebcamApp.app` (macOS Application Bundle)
 
+Builds `src/menu_bar_app.py` into a macOS application bundle named `OakWebcamApp.app`.
 
-## セットアップ (開発者向け)
+Run the following command in the project root directory:
+```bash
+bash build_scripts/build_app.sh
+```
+This script performs the following:
+1.  Internally runs `build_scripts/build_uvc_runner.sh` to build the latest `uvc_runner`.
+2.  Uses `PyInstaller` to create `OakWebcamApp.app`. The built `uvc_runner` and the `src/uvc_handler.py` script itself are included in the bundle.
+3.  The app icon (`assets/app_icon.icns` - **TODO: To be created in Issue #8**) will be applied (currently commented out in the build script).
+Upon successful build, `OakWebcamApp.app` is created in the `dist/` directory and then moved to the `build_scripts/app/` directory.
+Build settings can be customized in `build_scripts/OakWebcamApp.spec` (may be generated on first build or created manually).
 
-1.  **開発環境のセットアップ**:
-    *   Python 3.8以上を推奨。
-    *   仮想環境の利用を推奨します。
-    *   必要なライブラリをインストール:
-        ```bash
-        pip install -r requirements.txt
-        ```
-        (`requirements.txt` には `depthai`, `rumps` などを記載)
+### Coding Conventions & Contributions
 
-2.  **実行可能ファイルのビルド (PyInstaller)**:
-    *   このプロジェクトでは、`src/uvc_handler.py` を単一の実行可能ファイルとしてビルドするためのスクリプトを提供しています。
-    *   **ビルドに必要なもの**:
-        *   PyInstaller: まだインストールしていない場合は、以下のコマンドでインストールしてください。
-            ```bash
-            pip install pyinstaller
-            ```
-    *   **`uvc_runner` のビルド (単一実行ファイル)**:
-        *   `src/uvc_handler.py` を `uvc_runner` という名前の単一実行ファイルとしてビルドするには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
-            ```bash
-            bash build_scripts/build_uvc_runner.sh
-            ```
-        *   ビルドが成功すると、プロジェクトルート直下の `dist/` ディレクトリ内に `uvc_runner` が作成されます。
-        *   このプロセス中に、`build_scripts/` ディレクトリに `uvc_runner.spec` という設定ファイルが、プロジェクトルート直下の `build/` ディレクトリに一時的な作業ファイルが生成されます。
-        *   **`.spec` ファイルについて**: このファイルはPyInstallerがビルド設定を管理するために使用します。通常は自動生成された内容で十分ですが、依存関係の追加、除外するモジュールの指定、隠しインポートの解決など、より詳細なビルドのカスタマイズが必要な場合に手動で編集することができます。
-        *   ビルドされた `uvc_runner` は、`python src/uvc_handler.py` と同様にコマンドライン引数を受け付けます。例えば、`./dist/uvc_runner -l` のように実行できます。
+*   **Coding Style**: Adhere to [PEP 8](https://www.python.org/dev/peps/pep-0008/). Using linters/formatters like `flake8` or `black` is recommended.
+*   **Type Hints**: Use type hints 적극적으로 for readability and maintainability. Type checking with `mypy` is recommended.
+*   **Commit Messages**: Follow the Conventional Commits format ([https://www.conventionalcommits.org/](https://www.conventionalcommits.org/)).
+    Examples: `feat: Add new feature`, `fix: Correct a bug`, `docs: Update documentation`, `refactor: Code refactoring`
+*   **Branching Strategy**:
+    *   `main`: Stable branch. Avoid direct commits; merge via Pull Requests.
+    *   `develop`: Development branch. New features and bug fixes should be based on this branch.
+    *   Feature branches: `feat/feature-name` (e.g., `feat/gui-settings`)
+    *   Bugfix branches: `fix/issue-number` or `fix/short-description` (e.g., `fix/123` or `fix/camera-disconnect`)
+*   **Pull Requests**:
+    *   Target the `develop` branch.
+    *   Clearly describe changes, reasons, and test results.
+    *   Conduct a self-review if possible.
 
-    *   **`OakWebcamApp.app` のビルド (macOSアプリケーションバンドル)**:
-        *   `src/menu_bar_app.py` を `OakWebcamApp.app` というmacOSアプリケーションバンドルとしてビルドするには、プロジェクトのルートディレクトリで以下のコマンドを実行します。
-            ```bash
-            bash build_scripts/build_app.sh
-            ```
-        *   このスクリプトは、まず内部的に `build_scripts/build_uvc_runner.sh` を実行して `uvc_runner` をビルドします。
-        *   次に、PyInstallerを使用して `OakWebcamApp.app` を作成します。この際、事前にビルドされた `uvc_runner` と、`src/uvc_handler.py` スクリプト自体もアプリケーションバンドル内に同梱されます。
-        *   ビルドプロセス中に `OakWebcamApp.spec` のような `.spec` ファイルが生成され、これも必要に応じてカスタマイズ可能です。
-        *   ビルドが成功すると、`OakWebcamApp.app` はPyInstallerによって一時的に `dist/` ディレクトリに作成された後、最終的に `build_scripts/app/` ディレクトリに移動されます。
+### Testing
 
-3.  **スクリプトの直接実行**:
-    *   **基本的なUVCデバイスとしての実行 (推奨される主な使用方法)**:
-        ```bash
-        python src/uvc_handler.py
-        ```
-        このコマンドでスクリプトを実行すると、スクリプトが動作している間のみOAK-D LiteがWebカメラとして利用可能になります。
+Currently, an automated testing framework is not implemented.
+Manual operational checks are the primary testing method.
+Introducing unit and integration tests is a future improvement.
 
-    *   **高度なオプション (`uvc_handler.py` 直接実行時)**:
-        *   アプリケーションパイプラインの書き込み (設定をデバイスに永続化):
-            ```bash
-            python src/uvc_handler.py -f
-            ```
-        *   ブートローダーの書き込み (特殊なメンテナンス用途):
-            ```bash
-            python src/uvc_handler.py -fb
-            ```
-        *   UVC初期化後にスクリプト終了 (デバイス単体で動作、設定は非永続):
-            ```bash
-            python src/uvc_handler.py -l
-            ```
+## ⚠️ Caveats & Known Issues
 
-## 注意点・既知の問題
+*   **`depthai` Version**: UVC functionality is relatively new, so behavior may vary with `depthai` versions. Using the version specified in `requirements.txt` is strongly recommended.
+*   **Device Recognition**: Ensure the OAK-D Lite is properly connected to the Mac via USB and recognized by the system before running scripts or the application.
+*   **Flashing Risks**: Writing to the flash memory (bootloader or application pipeline) can seriously affect device operation. Incorrect operations could potentially brick the device, so proceed with caution and a full understanding of the actions. Power cycle the device as instructed after flashing.
+*   **Physical Disconnection While Camera is Active**: If the OAK-D Lite's USB cable is physically unplugged while the camera is active, the menu bar application may not automatically detect/handle the camera process stopping. In this case, you may need to manually select "Stop Camera" (or "Disconnect Camera") from the menu or restart the application.
+*   **Resource Conflicts**: The utility may not function correctly if another application is using the OAK-D Lite.
+*   **macOS Security**: On first launch or after updates, macOS security features (like Gatekeeper) might block the application. If so, allow execution in "System Preferences" > "Security & Privacy".
 
-*   **`depthai` のバージョン**: UVC機能は比較的新しい機能のため、`depthai` のバージョンによって動作が異なる場合があります。`requirements.txt` で指定されたバージョンを使用することを推奨します。
-*   **デバイスの認識**: スクリプト実行前にOAK-D LiteがPCに正しく接続され、認識されていることを確認してください。
-*   **フラッシュ書き込み**: ブートローダーやアプリケーションパイプラインの書き込みは、デバイスの動作に影響を与える可能性があるため、慎重に行ってください。書き込み後は、指示に従いデバイスの電源を再投入してください。
-*   **カメラ起動中の物理的な切断**: カメラが起動している最中にOAK-D LiteのUSBケーブルを物理的に抜いた場合、アプリケーションがカメラの停止を自動的に検知できないことがあります。この場合、メニューから手動でカメラを停止するか、アプリケーションを再起動する必要がある場合があります。この挙動は現在のバージョンではサポート外となります。
+## ❓ FAQ (Frequently Asked Questions)
 
-## 今後の改善点 (TODO)
+*   **Q1: Camera is not recognized.**
+    *   A1: Check if the OAK-D Lite is correctly connected to your Mac via USB. If using a USB hub, try connecting directly to a USB port on the Mac. Also, verify that the `depthai` library is installed correctly and matches the version in `requirements.txt`.
+*   **Q2: Menu bar icon does not appear.**
+    *   A2: Ensure the `python src/menu_bar_app.py` command runs without errors. Check if the `rumps` library is installed correctly.
+*   **Q3: "Auto-start on Connection" (Enable Auto Camera Control) doesn't work.**
+    *   A3: Verify that OAK-D Lite connection/disconnection is being detected correctly. Rarely, macOS might delay USB device event notifications.
+*   **Q4: When should I use the advanced options (`-f`, `-fb`, `-l`)?**
+    *   A4: These options are for special purposes and not needed for regular webcam use. Use them only if you have a clear reason, such as updating device firmware, persisting specific settings, or temporarily running the device without a script, and understand the implications.
 
-*   [x] `PyInstaller` を用いたスタンドアロンアプリケーション化 (`uvc_handler.py` のみ、ビルドスクリプト `build_scripts/build_uvc_runner.sh` を提供)。
-*   [ ] `launchd` サービスによる自動起動設定。
-*   [ ] より詳細なエラーハンドリングとユーザーフレンドリーなフィードバック。
-*   [ ] GUI設定画面の追加 (カメラ解像度/FPS選択など)。
+## 🛣️ Future Improvements (Excerpt from Roadmap)
 
-## ライセンス
+*   **Issue #8: Create and apply application icon**
+*   **Issue #7: `launchd` service for automatic startup** (more OS-native auto-start)
+*   **Issue #13: Detailed error handling and user-friendly feedback**
+*   **Issue #14: Add GUI settings screen** (camera resolution/FPS selection, etc.)
+*   **Issue #11: More robust USB event monitoring** (consider IOKit)
+*   **Issue #15: Application code signing and notarization** (enhanced Gatekeeper compatibility)
+*   **Issue #12: Dynamic generation and management of `launchd` plist** (in-app auto-start settings)
+*   **Issue #16: Multilingual support**
 
-このプロジェクトは MIT License のもとで公開されます。詳細は `LICENSE` ファイルを参照してください。
+Refer to the [Development Roadmap (`doc/development_roadmap.md`)](doc/development_roadmap.md) for details.
+
+## 📜 License
+
+This project is released under the [MIT License](LICENSE).
+
+## 🙏 Acknowledgements
+
+*   [Luxonis](https://www.luxonis.com/) and the DepthAI team: For providing the OAK cameras and the powerful SDK.
+*   [rumps](https://github.com/jaredks/rumps): A great library for easily creating macOS menu bar apps.
+
+---
+
+Feel free to submit feedback, bug reports, and feature requests via GitHub Issues!
+Contributions are also welcome.

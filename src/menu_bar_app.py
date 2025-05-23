@@ -28,7 +28,7 @@ class MenuBarApp(rumps.App):
         )
         
         self.status_label_item = rumps.MenuItem("Status: Initializing...")
-        self.menu = [self.status_label_item, self.auto_mode_menu_item, self.disconnect_camera_menu_item, rumps.separator]
+        self.menu = [self.auto_mode_menu_item, self.status_label_item, self.disconnect_camera_menu_item, rumps.separator]
         # rumps automatically adds a "Quit" button
 
     # --- Callback methods for DeviceConnectionManager ---

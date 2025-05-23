@@ -20,7 +20,13 @@ class MenuBarApp(rumps.App):
         )
         # Initial state from DeviceConnectionManager
         self.auto_mode_menu_item.state = self.device_manager.get_auto_mode_status() 
-        self.menu = [self.auto_mode_menu_item, rumps.separator]
+        
+        self.disconnect_camera_menu_item = rumps.MenuItem(
+            "Disconnect Camera",
+            callback=self.callback_disconnect_camera
+        )
+        
+        self.menu = [self.auto_mode_menu_item, self.disconnect_camera_menu_item, rumps.separator]
         # rumps automatically adds a "Quit" button
 
     # --- Callback methods for DeviceConnectionManager ---
@@ -38,6 +44,9 @@ class MenuBarApp(rumps.App):
         # No need to pass sender, DeviceConnectionManager handles its own logic
         self.device_manager.toggle_auto_mode()
         # The menu item state will be updated via the update_menu_callback
+
+    def callback_disconnect_camera(self, sender):
+        self.device_manager.disconnect_camera_explicitly()
 
     @rumps.clicked("Quit")
     def callback_quit_app(self, sender=None):

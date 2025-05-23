@@ -6,7 +6,7 @@ import datetime
 import rumps # For rumps.Timer, will be managed internally
 
 class DeviceConnectionManager:
-    def __init__(self, notify_ui_callback, alert_ui_callback, update_menu_callback):
+    def __init__(self, notify_ui_callback, alert_ui_callback, update_menu_callback, update_status_label_callback):
         self.uvc_process = None
         self.camera_running = False
         self.auto_mode_enabled = True  # Default to True as in MenuBarApp
@@ -19,6 +19,7 @@ class DeviceConnectionManager:
         self.notify_ui_callback = notify_ui_callback
         self.alert_ui_callback = alert_ui_callback
         self.update_menu_callback = update_menu_callback
+        self.update_status_label_callback = update_status_label_callback # Store the new callback
 
         # 初期状態でのカメラ起動チェック
         initial_devices = dai.Device.getAllAvailableDevices()
@@ -33,6 +34,15 @@ class DeviceConnectionManager:
 
         self.device_check_timer = rumps.Timer(self.check_device_connection, 3)
         self.device_check_timer.start()
+
+        self._update_status_label_based_on_state() # Initial status update
+
+    def _update_status_label_based_on_state(self):
+        if self.camera_running:
+            self.update_status_label_callback("接続中")
+        else:
+            # Per refined requirement: "接続なし" if not camera_running
+            self.update_status_label_callback("接続なし")
 
     def check_device_connection(self, sender=None):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -84,6 +94,7 @@ class DeviceConnectionManager:
             f"  Action Taken: {action_taken}"
         ]
         print("\n".join(log_message_parts))
+        self._update_status_label_based_on_state() # Update status at the end of check
 
     def toggle_auto_mode(self):
         self.auto_mode_enabled = not self.auto_mode_enabled
@@ -105,6 +116,8 @@ class DeviceConnectionManager:
             # 自動モードが無効になり、かつカメラが起動している場合は停止する
             self.notify_ui_callback("OAK-D Auto Control", "Stopping Camera", "Auto mode disabled, stopping camera.")
             self.stop_camera_action()
+        # Ensure label is updated after potential start/stop actions
+        self._update_status_label_based_on_state()
 
     def disconnect_camera_explicitly(self):
         if self.camera_running and self.uvc_process:
@@ -121,8 +134,10 @@ class DeviceConnectionManager:
             else:
                 message = "Camera has been disconnected."
             self.notify_ui_callback("OAK-D Camera", "Disconnected", message)
+            # stop_camera_action already called _update_status_label_based_on_state
         else:
             self.notify_ui_callback("OAK-D Camera", "Status", "Camera is not currently running or connected.")
+            self._update_status_label_based_on_state() # Ensure label is "接続なし"
 
     def start_camera_action(self):
         if not self.camera_running:
@@ -139,6 +154,7 @@ class DeviceConnectionManager:
                 self.uvc_process = subprocess.Popen(['python3', script_path, '--start-uvc'])
                 self.camera_running = True
                 self.notify_ui_callback("OAK-D Camera", "Status", "Camera starting...")
+                self._update_status_label_based_on_state() # Update on successful start
             except Exception as e:
                 self.alert_ui_callback("Error Starting Camera", str(e))
                 self.camera_running = False
@@ -149,6 +165,7 @@ class DeviceConnectionManager:
                     except Exception:
                         pass
                 self.uvc_process = None
+                self._update_status_label_based_on_state() # Update on failure
 
     def stop_camera_action(self):
         if self.camera_running and self.uvc_process:
@@ -171,9 +188,13 @@ class DeviceConnectionManager:
             finally:
                 self.uvc_process = None
                 self.camera_running = False
+                self._update_status_label_based_on_state() # Update after stopping
         elif not self.uvc_process and self.camera_running:
+            # This case indicates an inconsistent state.
+            # For example, camera_running was true but no process handle.
             self.alert_ui_callback("Camera State Inconsistent", "Resetting. Camera might still be running if started externally.")
             self.camera_running = False
+            self._update_status_label_based_on_state() # Update label
 
     def get_camera_running_status(self):
         return self.camera_running

@@ -11,7 +11,8 @@ class MenuBarApp(rumps.App):
         self.device_manager = DeviceConnectionManager(
             notify_ui_callback=self.show_notification,
             alert_ui_callback=self.show_alert,
-            update_menu_callback=self.update_auto_mode_menu_state
+            update_menu_callback=self.update_auto_mode_menu_state,
+            update_status_label_callback=self.update_status_label # Added this line
         )
 
         self.auto_mode_menu_item = rumps.MenuItem(
@@ -26,7 +27,8 @@ class MenuBarApp(rumps.App):
             callback=self.callback_disconnect_camera
         )
         
-        self.menu = [self.auto_mode_menu_item, self.disconnect_camera_menu_item, rumps.separator]
+        self.status_label_item = rumps.MenuItem("Status: Initializing...")
+        self.menu = [self.status_label_item, self.auto_mode_menu_item, self.disconnect_camera_menu_item, rumps.separator]
         # rumps automatically adds a "Quit" button
 
     # --- Callback methods for DeviceConnectionManager ---
@@ -47,6 +49,9 @@ class MenuBarApp(rumps.App):
 
     def callback_disconnect_camera(self, sender):
         self.device_manager.disconnect_camera_explicitly()
+
+    def update_status_label(self, status_text):
+        self.status_label_item.title = status_text
 
     @rumps.clicked("Quit")
     def callback_quit_app(self, sender=None):

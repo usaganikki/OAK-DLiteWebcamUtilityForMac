@@ -8,11 +8,13 @@ class MenuBarApp(rumps.App):
     def __init__(self):
         super(MenuBarApp, self).__init__("OAK-D UVC", title="OAK-D", quit_button=None)
         
+        self.status_label_item = rumps.MenuItem("Status: Initializing...")
+
         self.device_manager = DeviceConnectionManager(
             notify_ui_callback=self.show_notification,
             alert_ui_callback=self.show_alert,
             update_menu_callback=self.update_auto_mode_menu_state,
-            update_status_label_callback=self.update_status_label # Added this line
+            update_status_label_callback=self.update_status_label
         )
 
         self.auto_mode_menu_item = rumps.MenuItem(
@@ -27,7 +29,6 @@ class MenuBarApp(rumps.App):
             callback=self.callback_disconnect_camera
         )
         
-        self.status_label_item = rumps.MenuItem("Status: Initializing...")
         self.menu = [self.auto_mode_menu_item, self.status_label_item, self.disconnect_camera_menu_item, rumps.separator]
         # rumps automatically adds a "Quit" button
 

@@ -9,6 +9,9 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+# Cython generated files in src
+src/*.c
+src/*.so
 
 # Virtual Environment
 venv/

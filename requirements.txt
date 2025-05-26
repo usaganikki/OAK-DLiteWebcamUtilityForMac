@@ -2,3 +2,4 @@ depthai==2.30.0.0
 depthai-sdk==1.14.0
 pyinstaller==6.13.0
 rumps
+pyobjc>=10.2

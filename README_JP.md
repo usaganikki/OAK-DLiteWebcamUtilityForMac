@@ -14,6 +14,7 @@ OAK-D Lite Webcam Utility for Macは、Luxonis社のOAK-D LiteカメラをmacOS�
 *   **メニューバーからの簡単操作**: macOSのメニューバーに常駐するアプリアイコンから、Webカメラの開始・停止、自動起動設定などを直感的に操作できます。
 *   **デバイス接続/切断時の自動制御**: OAK-D LiteのUSB接続・切断を検知し、Webカメラ機能を自動的に開始または停止する設定が可能です。
 *   **安定した動作**: `uvc_handler.py` スクリプトをサブプロセスとして管理することで、GUIアプリケーションとカメラ制御ロジックを分離し、安定した動作を実現しています。
+*   **効率的なUSBデバイス検出 (macOS)**: Cythonラッパー (`src/iokit_wrapper.pyx`) を介してmacOSネイティブのIOKitフレームワークを活用し、OAK-D Lite専用の非常に効率的なイベント駆動型USBデバイス検出を実現しています。このアプローチは、IOKitイベントソースをメインアプリケーションのイベントループに直接統合することで、低CPU使用率、デバイス接続/切断への即時応答、およびポーリング方式と比較して強化された安定性を保証します。
 *   **柔軟なパイプライン設定 (高度)**: デフォルトの1080p設定に加え、4K解像度からのダウンスケールや720pなど、複数の解像度設定に対応したパイプラインを利用可能です（現在はスクリプト編集によるカスタマイズが必要）。
 *   **デバイスへの設定書き込み (高度)**:
     *   特定のWebカメラ設定（アプリケーションパイプライン）をOAK-D Liteのフラッシュメモリに書き込み、永続化できます。
@@ -49,12 +50,22 @@ source venv/bin/activate  # macOS / Linux
 pip install -r requirements.txt
 ```
 `requirements.txt` には、OAK-D Lite制御用の `depthai` (コアライブラリ)、`depthai-sdk` (追加機能提供)、メニューバーアプリ用の `rumps` (GUI制御)、アプリケーションビルド用の `pyinstaller` など、動作に必要なライブラリが含まれています。
+また、IOKitラッパーのビルドに必要な `Cython` と `setuptools` も含まれています。
 
-### 3. メニューバーアプリケーションの起動 (推奨)
+### 3. Cython IOKitラッパーのビルド (macOSのみ)
 
-以下のコマンドでメニューバーアプリケーションを起動します。
+本アプリケーションは、macOS上でネイティブのIOKit USBイベント監視を行うためにCythonモジュールを使用します。このモジュールは最初にコンパイルする必要があります。
+プロジェクトのルートディレクトリで、以下のコマンドを実行してください。
 ```bash
-python src/menu_bar_app.py
+python3 setup.py build_ext --inplace
+```
+このコマンドは `src/iokit_wrapper.pyx` をコンパイルし、生成された `.so` ファイルを `src` ディレクトリに配置します。
+
+### 4. メニューバーアプリケーションの起動 (推奨)
+
+Cythonモジュールのビルド後、以下のコマンドでメニューバーアプリケーションを起動します。
+```bash
+python3 -m src.menu_bar_app
 ```
 起動すると、macOSのメニューバーに「OAK-D UVC」(またはアイコンにマウスオーバーすると「OAK-D」)という名前でアプリケーションが表示され、OAK-D Liteのアイコンが表示されます。
 このアイコンをクリックして、カメラの制御や設定変更を行えます。
@@ -63,14 +74,15 @@ python src/menu_bar_app.py
 **初回起動時の注意:**
 macOSのセキュリティ設定により、アプリケーションの実行がブロックされる場合があります。その場合は、「システム環境設定」>「セキュリティとプライバシー」>「一般」タブで、実行を許可してください。
 
-### 4. コマンドラインからの直接実行 (高度な操作・デバッグ用)
+### 5. コマンドラインからの直接実行 (高度な操作・デバッグ用)
 
 `src/uvc_handler.py` スクリプトを直接実行することも可能です。
 ```bash
-python src/uvc_handler.py
+python3 src/uvc_handler.py
 ```
 この方法では、スクリプトを実行している間のみOAK-D LiteがWebカメラとして機能します。
 詳細は後述の「`src/uvc_handler.py` の詳細」セクションを参照してください。
+（注意: `uvc_handler.py` の直接実行では、IOKitベースのデバイス監視は使用されません。）
 
 ## 👇 使い方
 
@@ -158,7 +170,8 @@ OAK-DLiteWebcamUtilityForMac/
 ├── src/                        # ソースコード
 │   ├── menu_bar_app.py         # macOSメニューバーアプリケーション
 │   ├── uvc_handler.py          # OAK-D Lite UVC制御コアスクリプト
-│   └── device_connection_manager.py # デバイス接続/切断監視クラス
+│   ├── device_connection_manager.py # デバイス接続/切断監視クラス
+│   └── iokit_wrapper.pyx       # IOKitフレームワーク用Cythonラッパー (macOS USBイベント用)
 ├── .gitignore
 ├── LICENSE                     # MITライセンスファイル
 ├── README.md                   # このファイル
@@ -178,13 +191,16 @@ OAK-DLiteWebcamUtilityForMac/
 
 ### ビルド手順
 
-このプロジェクトでは、`PyInstaller` を使用して実行可能ファイルをビルドします。
-事前に `PyInstaller` をインストールしておいてください:
-```bash
-pip install pyinstaller
-```
+本アプリケーションは、Pythonベースのメニューバーアプリと、IOKit統合のためのCythonモジュールで構成されています。
 
-#### 1. `uvc_runner` のビルド (単一実行ファイル)
+#### 1. Cython IOKitラッパーのビルド (macOSのみ)
+「インストールと起動」セクションで述べたように、まずCythonモジュールをビルドする必要があります。
+```bash
+python3 setup.py build_ext --inplace
+```
+これにより、`src` ディレクトリに `iokit_wrapper.cpython-*.so` が作成されます。
+
+#### 2. `uvc_runner` のビルド (カメラ制御用単一実行ファイル)
 
 `src/uvc_handler.py` を `uvc_runner` という名前の単一実行ファイルとしてビルドします。
 この実行ファイルは、メニューバーアプリケーション (`OakWebcamApp.app`) 内部で使用されます。
@@ -210,6 +226,64 @@ bash build_scripts/build_app.sh
 3.  アプリアイコン (`assets/app_icon.icns` - **TODO: Issue #8にて作成予定**) が適用されます（現在はビルドスクリプト内でコメントアウトされています）。
 ビルドが成功すると、`dist/` ディレクトリ内に `OakWebcamApp.app` が作成され、その後 `build_scripts/app/` ディレクトリに移動されます。
 ビルド設定は `build_scripts/OakWebcamApp.spec` (初回ビルド時に生成される可能性あり、または手動作成) でカスタマイズ可能です。
+
+### IOKitベースのUSBイベント監視 (macOS)
+
+応答性が高く効率的なUSBデバイス検出を提供するため、このユーティリティはmacOS上でカスタムのIOKit統合を採用しています。以下にその仕組みの概要を説明します。
+
+1.  **Cythonラッパー (`src/iokit_wrapper.pyx`)**:
+    *   このモジュールは、macOSのIOKitおよびCoreFoundationフレームワークのC APIを直接呼び出します。
+    *   OAK-D Lite専用（ベンダーIDとプロダクトIDに基づく）のUSBデバイスマッチング（接続）およびターミネーション（切断）イベントの通知を設定します。
+    *   IOKit通知が発生すると、Cythonモジュール内のCコールバック関数がトリガーされます。
+    *   独立したイベントループスレッドを実行する代わりに（GUIアプリで不安定性を引き起こす可能性があるため）、`init_usb_monitoring` は `IONotificationPortRef` を作成し、そこから `CFRunLoopSourceRef` を派生させます。この `CFRunLoopSourceRef` のアドレスがPython側に返されます。
+
+2.  **デバイス接続マネージャー (`src/device_connection_manager.py`)**:
+    *   `iokit_wrapper` を初期化し、`CFRunLoopSourceRef` のアドレスを取得します。
+    *   IOKitイベント用の独立したスレッドは管理しなくなりました。
+
+3.  **メニューバーアプリ (`src/menu_bar_app.py`)**:
+    *   `DeviceConnectionManager` から `CFRunLoopSourceRef` のアドレスを取得します。
+    *   `iokit_wrapper.pyx` 内のヘルパー関数 (`add_run_loop_source_to_main_loop`) を使用して、このIOKitイベントソースをメインアプリケーションの `CFRunLoop`（`CFRunLoopGetMain()` 経由で取得）に追加します。
+    *   これにより、IOKitイベント処理が `rumps` (AppKit) のメインイベントループに直接統合されます。
+    *   アプリケーション終了時には、別のヘルパー関数 (`remove_run_loop_source_from_main_loop`) が呼び出されてソースが削除され、`iokit_wrapper.stop_usb_monitoring()` がIOKitリソースをクリーンアップします。
+
+4.  **イベント処理フロー**:
+    *   USBデバイスが接続または切断されると、IOKitが通知を送信します。
+    *   IOKitの `CFRunLoopSourceRef` を監視しているメインアプリケーションのランループがこのイベントを拾います。
+    *   `iokit_wrapper.pyx` 内のCコールバック (`_usb_device_event_callback`) がメインスレッドで実行されます。
+    *   このコールバックは、Python GILを取得した後、`USBEventHandler` 内の適切なPythonハンドラメソッド（例: `on_device_connected`）を呼び出します。
+    *   Pythonハンドラは、`MenuBarApp` へのコールバックを通じてアプリケーションの状態とUIを更新します。
+
+このアプローチにより、すべてのIOKitイベント処理とそれに続くPythonロジックがメインアプリケーションスレッドのコンテキスト内で発生し、安定性と応答性が向上します。
+
+**簡略化されたイベントフロー図:**
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant MenuBarApp as rumpsアプリ (メインスレッド)
+    participant DeviceConnectionManager as DCM
+    participant IOKitWrapper as iokit_wrapper.pyx
+    participant IOKitSystem as macOS IOKit
+
+    MenuBarApp->>DeviceConnectionManager: 初期化
+    DeviceConnectionManager->>IOKitWrapper: init_usb_monitoring()
+    IOKitWrapper-->>IOKitSystem: IOKit通知設定
+    IOKitSystem-->>IOKitWrapper: CFRunLoopSourceRefアドレス返却
+    IOKitWrapper-->>DeviceConnectionManager: アドレス返却
+    DeviceConnectionManager-->>MenuBarApp: アドレス提供
+
+    MenuBarApp->>IOKitWrapper: add_run_loop_source_to_main_loop(アドレス)
+    Note right of MenuBarApp: IOKitソースをメインイベントループに追加
+
+    User->>OAK-D Lite: USB接続/切断
+    IOKitSystem-->>MenuBarApp: IOKitイベント (メインループ経由)
+    Note right of MenuBarApp: メインループがIOKitコールバックにディスパッチ
+    MenuBarApp->>IOKitWrapper: _usb_device_event_callback()
+    IOKitWrapper->>DeviceConnectionManager: PythonEventHandler.on_device_event()
+    DeviceConnectionManager->>MenuBarApp: UI更新コールバック
+    MenuBarApp-->>User: UI更新 (通知、メニューステータス)
+```
 
 ### コーディング規約・コントリビューション
 

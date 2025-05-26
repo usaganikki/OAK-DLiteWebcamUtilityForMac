@@ -16,7 +16,7 @@ This utility allows you to leverage the powerful image processing capabilities o
 *   **Simple Menu Bar Operation**: Intuitively control webcam start/stop, auto-start settings, etc., from the app icon résident in the macOS menu bar.
 *   **Automatic Control on Device Connection/Disconnection**: Detects USB connection/disconnection of the OAK-D Lite and can automatically start or stop the webcam function.
 *   **Stable Operation**: Manages the `uvc_handler.py` script as a subprocess, separating the GUI application from the camera control logic for stable performance.
-*   **Efficient USB Device Detection (macOS)**: Utilizes macOS's native IOKit framework for USB device detection (specifically for OAK-D Lite). This event-driven approach replaces the previous polling mechanism, resulting in lower CPU usage, faster response times for connection/disconnection events, and increased reliability. (Note: This advanced USB detection is specific to macOS due to IOKit.)
+*   **Efficient USB Device Detection (macOS)**: Leverages macOS's native IOKit framework via a Cython wrapper (`src/iokit_wrapper.pyx`) for highly efficient, event-driven USB device detection (specifically for OAK-D Lite). This approach integrates IOKit event sources directly into the main application event loop, ensuring low CPU usage, immediate response to device connection/disconnection, and enhanced stability compared to polling methods.
 *   **Flexible Pipeline Configuration (Advanced)**: In addition to the default 1080p setting, pipelines対応した to multiple resolution settings, such as downscaling from 4K or 720p, are available (currently requires script editing for customization).
 *   **Device Flashing (Advanced)**:
     *   Write specific webcam settings (application pipeline) to the OAK-D Lite's flash memory for persistence.
@@ -52,16 +52,22 @@ source venv/bin/activate  # macOS / Linux
 pip install -r requirements.txt
 ```
 `requirements.txt` includes `depthai` (core library) for OAK-D Lite control, `depthai-sdk` (provides additional features), `rumps` (GUI control) for the menu bar app, `pyinstaller` for application bundling, and other necessary libraries.
+It also includes `Cython` and `setuptools` which are required for building the IOKit wrapper.
 
-**Additional Dependencies (for macOS users)**:
+### 3. Build the Cython IOKit Wrapper (macOS only)
 
-*   `pyobjc`: This library is required for the native IOKit integration on macOS, which enables efficient monitoring of USB device events. It is included in `requirements.txt` and will be installed as part of the `pip install -r requirements.txt` command. If you encounter issues or are installing manually, you can typically install it via: `pip install pyobjc`
-
-### 3. Launch the Menu Bar Application (Recommended)
-
-Launch the menu bar application with the following command:
+The application uses a Cython module for native IOKit USB event monitoring on macOS. This module needs to be compiled first.
+In the project root directory, run:
 ```bash
-python src/menu_bar_app.py
+python3 setup.py build_ext --inplace
+```
+This command compiles `src/iokit_wrapper.pyx` and places the resulting `.so` file in the `src` directory.
+
+### 4. Launch the Menu Bar Application (Recommended)
+
+After building the Cython module, launch the menu bar application with the following command:
+```bash
+python3 -m src.menu_bar_app
 ```
 When launched, the application will appear in the macOS menu bar as "OAK-D UVC" (or "OAK-D" when hovering over the icon), displaying the OAK-D Lite icon.
 Click this icon to control the camera and change settings.
@@ -70,14 +76,15 @@ If the OAK-D Lite is already connected when the application starts and "Enable A
 **Note on First Launch:**
 macOS security settings may block the application from running. If this happens, go to "System Preferences" > "Security & Privacy" > "General" tab and allow the application to run.
 
-### 4. Direct Execution from Command Line (Advanced Operations/Debugging)
+### 5. Direct Execution from Command Line (Advanced Operations/Debugging)
 
 You can also run the `src/uvc_handler.py` script directly:
 ```bash
-python src/uvc_handler.py
+python3 src/uvc_handler.py
 ```
 With this method, the OAK-D Lite will function as a webcam only while the script is running.
 Refer to the "`src/uvc_handler.py` Details" section below for more information.
+(Note: Direct execution of `uvc_handler.py` does not use the IOKit-based device monitoring.)
 
 ## 👇 Usage
 
@@ -165,7 +172,8 @@ OAK-DLiteWebcamUtilityForMac/
 ├── src/                        # Source code
 │   ├── menu_bar_app.py         # macOS menu bar application
 │   ├── uvc_handler.py          # OAK-D Lite UVC control core script
-│   └── device_connection_manager.py # Device connection/disconnection monitoring class
+│   ├── device_connection_manager.py # Device connection/disconnection monitoring class
+│   └── iokit_wrapper.pyx       # Cython wrapper for IOKit framework (macOS USB events)
 ├── .gitignore
 ├── LICENSE                     # MIT License file
 ├── README.md                   # This file (English)
@@ -186,13 +194,16 @@ OAK-DLiteWebcamUtilityForMac/
 
 ### Build Instructions
 
-This project uses `PyInstaller` to build executables.
-Ensure `PyInstaller` is installed beforehand:
-```bash
-pip install pyinstaller
-```
+The application consists of a Python-based menu bar app and a Cython module for IOKit integration.
 
-#### 1. Build `uvc_runner` (Standalone Executable)
+#### 1. Build the Cython IOKit Wrapper (macOS only)
+As mentioned in the "Installation and Launch" section, the Cython module must be built first:
+```bash
+python3 setup.py build_ext --inplace
+```
+This creates `iokit_wrapper.cpython-*.so` in the `src` directory.
+
+#### 2. Build `uvc_runner` (Standalone Executable for Camera Control)
 
 Builds `src/uvc_handler.py` into a single executable named `uvc_runner`.
 This executable is used internally by the menu bar application (`OakWebcamApp.app`).
@@ -218,6 +229,64 @@ This script performs the following:
 3.  The app icon (`assets/app_icon.icns` - **TODO: To be created in Issue #8**) will be applied (currently commented out in the build script).
 Upon successful build, `OakWebcamApp.app` is created in the `dist/` directory and then moved to the `build_scripts/app/` directory.
 Build settings can be customized in `build_scripts/OakWebcamApp.spec` (may be generated on first build or created manually).
+
+### IOKit-based USB Event Monitoring (macOS)
+
+To provide responsive and efficient USB device detection, this utility employs a custom IOKit integration on macOS. Here's a brief overview of how it works:
+
+1.  **Cython Wrapper (`src/iokit_wrapper.pyx`)**:
+    *   This module directly calls C APIs from macOS's IOKit and CoreFoundation frameworks.
+    *   It sets up notifications for USB device matching (connection) and termination (disconnection) events specifically for the OAK-D Lite (based on Vendor ID and Product ID).
+    *   When an IOKit notification occurs, a C callback function within the Cython module is triggered.
+    *   Instead of running a separate event loop thread (which can cause instability with GUI apps), `init_usb_monitoring` now creates an `IONotificationPortRef` and derives a `CFRunLoopSourceRef` from it. The address of this `CFRunLoopSourceRef` is returned to the Python side.
+
+2.  **Device Connection Manager (`src/device_connection_manager.py`)**:
+    *   Initializes the `iokit_wrapper` and obtains the `CFRunLoopSourceRef` address.
+    *   It no longer manages a separate thread for IOKit events.
+
+3.  **Menu Bar App (`src/menu_bar_app.py`)**:
+    *   Retrieves the `CFRunLoopSourceRef` address from the `DeviceConnectionManager`.
+    *   Uses a helper function in `iokit_wrapper.pyx` (`add_run_loop_source_to_main_loop`) to add this IOKit event source to the main application's `CFRunLoop` (obtained via `CFRunLoopGetMain()`).
+    *   This integrates IOKit event processing directly into the `rumps` (AppKit) main event loop.
+    *   When the application quits, another helper (`remove_run_loop_source_from_main_loop`) is called to remove the source, and `iokit_wrapper.stop_usb_monitoring()` cleans up IOKit resources.
+
+4.  **Event Handling Flow**:
+    *   When a USB device is connected or disconnected, IOKit sends a notification.
+    *   The main application run loop, now monitoring the IOKit `CFRunLoopSourceRef`, picks up this event.
+    *   The C callback in `iokit_wrapper.pyx` (`_usb_device_event_callback`) is executed on the main thread.
+    *   This callback, after acquiring the Python GIL, calls the appropriate Python handler method in `USBEventHandler` (e.g., `on_device_connected`).
+    *   The Python handler then updates the application state and UI through callbacks to `MenuBarApp`.
+
+This approach ensures that all IOKit event handling and subsequent Python logic occur within the context of the main application thread, improving stability and responsiveness.
+
+**Simplified Event Flow Diagram:**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant MenuBarApp as rumps App (Main Thread)
+    participant DeviceConnectionManager as DCM
+    participant IOKitWrapper as iokit_wrapper.pyx
+    participant IOKitSystem as macOS IOKit
+
+    MenuBarApp->>DeviceConnectionManager: Initialize
+    DeviceConnectionManager->>IOKitWrapper: init_usb_monitoring()
+    IOKitWrapper-->>IOKitSystem: Setup IOKit Notifications
+    IOKitSystem-->>IOKitWrapper: Return CFRunLoopSourceRef Address
+    IOKitWrapper-->>DeviceConnectionManager: Return Address
+    DeviceConnectionManager-->>MenuBarApp: Provide Address
+
+    MenuBarApp->>IOKitWrapper: add_run_loop_source_to_main_loop(Address)
+    Note right of MenuBarApp: IOKit source added to main event loop
+
+    User->>OAK-D Lite: Connect/Disconnect USB
+    IOKitSystem-->>MenuBarApp: IOKit Event (via Main Loop)
+    Note right of MenuBarApp: Main loop dispatches to IOKit callback
+    MenuBarApp->>IOKitWrapper: _usb_device_event_callback()
+    IOKitWrapper->>DeviceConnectionManager: PythonEventHandler.on_device_event()
+    DeviceConnectionManager->>MenuBarApp: UI Update Callbacks
+    MenuBarApp-->>User: Update UI (Notification, Menu Status)
+```
 
 ### Coding Conventions & Contributions
 

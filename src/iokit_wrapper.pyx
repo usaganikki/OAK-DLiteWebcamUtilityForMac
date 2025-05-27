@@ -91,7 +91,8 @@ cdef extern from "IOKit/IOKitLib.h":
     ctypedef unsigned int mach_port_t # Changed from 'mach_port_t mach_port_t'
 
     # 定数
-    cdef mach_port_t kIOMasterPortDefault # macOS 12以降は kIOMainPortDefault
+    cdef mach_port_t kIOMasterPortDefault # Deprecated on macOS 12+
+    cdef mach_port_t kIOMainPortDefault # Preferred on macOS 12+
     cdef kern_return_t KERN_SUCCESS
 
     # 基本関数
@@ -299,9 +300,22 @@ def init_usb_monitoring(object callback_handler, int vid, int pid):
     g_python_callback_handler = callback_handler
     print(f"[iokit_wrapper] Python callback handler set: {g_python_callback_handler}") # This is a Python object, should be fine
 
-    g_notify_port = IONotificationPortCreate(kIOMasterPortDefault)
-    print(f"[iokit_wrapper] IONotificationPortCreate result (addr): {<Py_ssize_t>g_notify_port}")
+    # Use kIOMainPortDefault if available (macOS 12+), otherwise kIOMasterPortDefault
+    # For simplicity in this step, we'll try kIOMainPortDefault directly.
+    # A more robust solution might involve checking macOS version or SDK capabilities.
+    g_notify_port = IONotificationPortCreate(kIOMainPortDefault) 
+    print(f"[iokit_wrapper] IONotificationPortCreate with kIOMainPortDefault result (addr): {<Py_ssize_t>g_notify_port}")
     if g_notify_port == NULL:
+        # Fallback or error
+        print("[iokit_wrapper] IONotificationPortCreate with kIOMainPortDefault failed, trying kIOMasterPortDefault...")
+        g_notify_port = IONotificationPortCreate(kIOMasterPortDefault)
+        print(f"[iokit_wrapper] IONotificationPortCreate with kIOMasterPortDefault result (addr): {<Py_ssize_t>g_notify_port}")
+        if g_notify_port == NULL:
+            raise IOKitError("Failed to create IONotificationPort with both kIOMainPortDefault and kIOMasterPortDefault")
+
+    # g_notify_port = IONotificationPortCreate(kIOMasterPortDefault) # Original line
+    # print(f"[iokit_wrapper] IONotificationPortCreate result (addr): {<Py_ssize_t>g_notify_port}")
+    # if g_notify_port == NULL:
         raise IOKitError("Failed to create IONotificationPort")
 
     g_run_loop_source = IONotificationPortGetRunLoopSource(g_notify_port)
@@ -565,7 +579,15 @@ def get_service_properties(service_name: str, property_name: str = None):
         if cf_matching_dict == NULL:
             raise IOKitError(f"Failed to create matching dictionary for {service_name}")
         
-        result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator)
+        # Use kIOMainPortDefault if available
+        result = IOServiceGetMatchingServices(kIOMainPortDefault, cf_matching_dict, &iterator)
+        if result != KERN_SUCCESS: # Fallback or handle error
+            print(f"[iokit_wrapper] IOServiceGetMatchingServices with kIOMainPortDefault failed ({result}), trying kIOMasterPortDefault...")
+            result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator)
+            if result != KERN_SUCCESS:
+                 raise IOKitError(f"Failed to get matching services with both ports: {result}")
+        
+        # result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator) # Original
         # IOServiceMatching creates a dict that we own.
         # IOServiceGetMatchingServices does NOT consume it according to some sources/examples.
         # So, we must release cf_matching_dict.
@@ -619,8 +641,16 @@ def list_services(service_class_name: str = None):
         
         if cf_matching_dict == NULL:
             raise IOKitError("Failed to create matching dictionary for list_services")
-        
-        result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator)
+
+        # Use kIOMainPortDefault if available
+        result = IOServiceGetMatchingServices(kIOMainPortDefault, cf_matching_dict, &iterator)
+        if result != KERN_SUCCESS: # Fallback or handle error
+            print(f"[iokit_wrapper] list_services: IOServiceGetMatchingServices with kIOMainPortDefault failed ({result}), trying kIOMasterPortDefault...")
+            result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator)
+            if result != KERN_SUCCESS:
+                 raise IOKitError(f"Failed to get matching services for list_services with both ports: {result}")
+
+        # result = IOServiceGetMatchingServices(kIOMasterPortDefault, cf_matching_dict, &iterator) # Original
         if result != KERN_SUCCESS:
             raise IOKitError(f"Failed to get matching services for list_services: {result}")
         
@@ -674,3 +704,179 @@ def get_system_serial():
 def get_system_model():
     props = get_service_properties("IOPlatformExpertDevice", "model")
     return props.get("model", "Unknown")
+
+
+# --- Test Helper Function: Synchronous Scan and Notify ---
+def trigger_device_scan_and_notify(object callback_handler, int vid, int pid):
+    """
+    Synchronously scans for devices matching VID/PID and calls
+    callback_handler.on_device_connected for each found device.
+    This is intended for testing purposes and does not rely on the async RunLoop.
+    """
+    print("[iokit_wrapper_test_helper] trigger_device_scan_and_notify: Start")
+    cdef io_iterator_t iterator = 0
+    cdef io_service_t usb_device = 0 # Initialize
+    cdef kern_return_t kr
+    cdef CFMutableDictionaryRef matching_dict = NULL
+    cdef int devices_found = 0
+    # Declare C variables at the top of the function scope
+    cdef long vendor_id_val
+    cdef CFNumberRef vid_cf = NULL
+    cdef CFStringRef vid_key_cf = NULL
+    cdef long product_id_val
+    cdef CFNumberRef pid_cf = NULL
+    cdef CFStringRef pid_key_cf = NULL
+    cdef int current_vid
+    cdef int current_pid
+    cdef str serial_number # Python object, but good to declare intent
+    cdef unsigned long long service_id
+    cdef kern_return_t kr_debug # For storing return codes for logging
+
+    if callback_handler is None:
+        print("[iokit_wrapper_test_helper] Error: callback_handler is None.")
+        return 0
+
+    try:
+        print(f"[iokit_wrapper_test_helper] Initial state: iterator (addr): {<Py_ssize_t>iterator}, matching_dict (addr): {<Py_ssize_t>matching_dict}")
+        # 1. Create matching dictionary
+        print("[iokit_wrapper_test_helper] Calling IOServiceMatching(b\"IOUSBDevice\")")
+        matching_dict = <CFMutableDictionaryRef>IOServiceMatching(b"IOUSBDevice")
+        print(f"[iokit_wrapper_test_helper] IOServiceMatching result (matching_dict addr): {<Py_ssize_t>matching_dict}")
+        if matching_dict == NULL:
+            print("[iokit_wrapper_test_helper] IOServiceMatching failed!")
+            raise IOKitError("IOServiceMatching failed in trigger_device_scan_and_notify")
+
+        # Add Vendor ID
+        print(f"[iokit_wrapper_test_helper] Adding VID {vid:04x} to matching_dict (addr): {<Py_ssize_t>matching_dict}")
+        vendor_id_val = vid
+        print("[iokit_wrapper_test_helper] Calling CFNumberCreate for VID")
+        vid_cf = CFNumberCreate(kCFAllocatorDefault, kCFNumberLongType, &vendor_id_val)
+        print(f"[iokit_wrapper_test_helper] CFNumberCreate for VID result (vid_cf addr): {<Py_ssize_t>vid_cf}")
+        if vid_cf == NULL: raise IOKitError("CFNumberCreate for VID failed")
+        
+        print("[iokit_wrapper_test_helper] Calling _py_str_to_cfstring for USB_VENDOR_ID_KEY")
+        vid_key_cf = _py_str_to_cfstring(USB_VENDOR_ID_KEY)
+        print(f"[iokit_wrapper_test_helper] _py_str_to_cfstring for VID key result (vid_key_cf addr): {<Py_ssize_t>vid_key_cf}")
+        if vid_key_cf == NULL: 
+            CFRelease(vid_cf); vid_cf = NULL # Clean up before raising
+            raise IOKitError("CFString for VID key failed")
+        
+        print(f"[iokit_wrapper_test_helper] Calling CFDictionarySetValue for VID. matching_dict (addr): {<Py_ssize_t>matching_dict}, vid_key_cf (addr): {<Py_ssize_t>vid_key_cf}, vid_cf (addr): {<Py_ssize_t>vid_cf}")
+        CFDictionarySetValue(matching_dict, vid_key_cf, vid_cf)
+        print("[iokit_wrapper_test_helper] CFDictionarySetValue for VID successful.")
+        
+        print(f"[iokit_wrapper_test_helper] Releasing vid_key_cf (addr): {<Py_ssize_t>vid_key_cf}")
+        CFRelease(vid_key_cf); vid_key_cf = NULL
+        print(f"[iokit_wrapper_test_helper] Releasing vid_cf (addr): {<Py_ssize_t>vid_cf}")
+        CFRelease(vid_cf); vid_cf = NULL
+
+        # Add Product ID
+        print(f"[iokit_wrapper_test_helper] Adding PID {pid:04x} to matching_dict (addr): {<Py_ssize_t>matching_dict}")
+        product_id_val = pid
+        print("[iokit_wrapper_test_helper] Calling CFNumberCreate for PID")
+        pid_cf = CFNumberCreate(kCFAllocatorDefault, kCFNumberLongType, &product_id_val)
+        print(f"[iokit_wrapper_test_helper] CFNumberCreate for PID result (pid_cf addr): {<Py_ssize_t>pid_cf}")
+        if pid_cf == NULL: raise IOKitError("CFNumberCreate for PID failed")
+
+        print("[iokit_wrapper_test_helper] Calling _py_str_to_cfstring for USB_PRODUCT_ID_KEY")
+        pid_key_cf = _py_str_to_cfstring(USB_PRODUCT_ID_KEY)
+        print(f"[iokit_wrapper_test_helper] _py_str_to_cfstring for PID key result (pid_key_cf addr): {<Py_ssize_t>pid_key_cf}")
+        if pid_key_cf == NULL: 
+            CFRelease(pid_cf); pid_cf = NULL # Clean up before raising
+            raise IOKitError("CFString for PID key failed")
+
+        print(f"[iokit_wrapper_test_helper] Calling CFDictionarySetValue for PID. matching_dict (addr): {<Py_ssize_t>matching_dict}, pid_key_cf (addr): {<Py_ssize_t>pid_key_cf}, pid_cf (addr): {<Py_ssize_t>pid_cf}")
+        CFDictionarySetValue(matching_dict, pid_key_cf, pid_cf)
+        print("[iokit_wrapper_test_helper] CFDictionarySetValue for PID successful.")
+
+        print(f"[iokit_wrapper_test_helper] Releasing pid_key_cf (addr): {<Py_ssize_t>pid_key_cf}")
+        CFRelease(pid_key_cf); pid_key_cf = NULL
+        print(f"[iokit_wrapper_test_helper] Releasing pid_cf (addr): {<Py_ssize_t>pid_cf}")
+        CFRelease(pid_cf); pid_cf = NULL
+        
+        print(f"[iokit_wrapper_test_helper] Matching dictionary created for VID={vid:04x}, PID={pid:04x}. matching_dict (addr): {<Py_ssize_t>matching_dict}")
+
+        # 2. Get currently matching services
+        print(f"[iokit_wrapper_test_helper] Calling IOServiceGetMatchingServices. matching_dict (addr): {<Py_ssize_t>matching_dict}, iterator (addr before call): {<Py_ssize_t>iterator}")
+        kr_debug = IOServiceGetMatchingServices(kIOMainPortDefault, matching_dict, &iterator)
+        print(f"[iokit_wrapper_test_helper] IOServiceGetMatchingServices with kIOMainPortDefault result: {kr_debug}, iterator (addr after call): {<Py_ssize_t>iterator}")
+        if kr_debug != KERN_SUCCESS:
+            print(f"[iokit_wrapper_test_helper] IOServiceGetMatchingServices with kIOMainPortDefault failed ({kr_debug}), trying kIOMasterPortDefault...")
+            kr_debug = IOServiceGetMatchingServices(kIOMasterPortDefault, matching_dict, &iterator)
+            print(f"[iokit_wrapper_test_helper] IOServiceGetMatchingServices with kIOMasterPortDefault result: {kr_debug}, iterator (addr after call): {<Py_ssize_t>iterator}")
+            if kr_debug != KERN_SUCCESS:
+                print(f"[iokit_wrapper_test_helper] IOServiceGetMatchingServices failed with both ports: {kr_debug}")
+                raise IOKitError(f"IOServiceGetMatchingServices failed: {kr_debug}")
+        
+        # kr_debug = IOServiceGetMatchingServices(kIOMasterPortDefault, matching_dict, &iterator) # Original
+        print("[iokit_wrapper_test_helper] IOServiceGetMatchingServices successful.")
+
+        # 3. Iterate and notify
+        print(f"[iokit_wrapper_test_helper] Starting device iteration loop. iterator (addr): {<Py_ssize_t>iterator}")
+        while True:
+            print(f"[iokit_wrapper_test_helper] Calling IOIteratorNext. iterator (addr): {<Py_ssize_t>iterator}")
+            usb_device = IOIteratorNext(iterator)
+            print(f"[iokit_wrapper_test_helper] IOIteratorNext result (usb_device addr): {<Py_ssize_t>usb_device}")
+            if usb_device == 0:
+                print("[iokit_wrapper_test_helper] IOIteratorNext returned 0, breaking loop.")
+                break
+            
+            devices_found += 1
+            print(f"[iokit_wrapper_test_helper] Device found (total: {devices_found}). usb_device (addr): {<Py_ssize_t>usb_device}. Getting properties...")
+            
+            current_vid = _get_long_property(usb_device, USB_VENDOR_ID_KEY.encode('utf-8'))
+            current_pid = _get_long_property(usb_device, USB_PRODUCT_ID_KEY.encode('utf-8'))
+            serial_number = _get_string_property(usb_device, IO_PLATFORM_SERIAL_NUMBER_KEY.encode('utf-8'))
+            service_id = _get_service_id(usb_device)
+            
+            print(f"[iokit_wrapper_test_helper] Device properties: VID={current_vid:04x}, PID={current_pid:04x}, SN='{serial_number}', ServiceID={service_id}")
+
+            # Call Python callback handler's on_device_connected
+            # This function is called from Python, so GIL is already held.
+            # No need for 'with gil:' here.
+            try:
+                if hasattr(callback_handler, 'on_device_connected'):
+                    print(f"[iokit_wrapper_test_helper] Calling callback_handler.on_device_connected for SN='{serial_number}'")
+                    callback_handler.on_device_connected(current_vid, current_pid, serial_number, service_id)
+                    print(f"[iokit_wrapper_test_helper] Returned from callback_handler.on_device_connected for SN='{serial_number}'")
+                else:
+                    print("[iokit_wrapper_test_helper] Error: callback_handler has no on_device_connected method.")
+            except Exception as e:
+                # Log Python exception
+                print(f"[iokit_wrapper_test_helper] Python exception in on_device_connected: {e!r}")
+            
+            print(f"[iokit_wrapper_test_helper] Releasing usb_device (addr): {<Py_ssize_t>usb_device}")
+            IOObjectRelease(usb_device)
+            usb_device = 0 # Mark as released
+            print(f"[iokit_wrapper_test_helper] Released usb_device.")
+
+        print(f"[iokit_wrapper_test_helper] Finished device iteration loop. Processed {devices_found} devices.")
+
+    except Exception as e:
+        print(f"[iokit_wrapper_test_helper] Exception caught in trigger_device_scan_and_notify try block: {e!r}")
+        # It's important to re-raise so the test fails, or handle appropriately.
+        # For debugging, we might want to see the finally block execute.
+        raise
+
+    finally:
+        print(f"[iokit_wrapper_test_helper] In finally block. Current state: iterator (addr: {<Py_ssize_t>iterator}), matching_dict (addr: {<Py_ssize_t>matching_dict})")
+        if iterator != 0:
+            print(f"[iokit_wrapper_test_helper] Attempting to release iterator (addr: {<Py_ssize_t>iterator})")
+            IOObjectRelease(iterator)
+            print("[iokit_wrapper_test_helper] Released iterator.")
+            iterator = 0 
+        else:
+            print("[iokit_wrapper_test_helper] Iterator is 0, not releasing.")
+            
+        if matching_dict != NULL:
+            print(f"[iokit_wrapper_test_helper] Attempting to release matching_dict (addr: {<Py_ssize_t>matching_dict})")
+            # IOServiceGetMatchingServices does not consume the dictionary.
+            # It is the caller's responsibility to release it.
+            CFRelease(matching_dict)
+            print("[iokit_wrapper_test_helper] Released matching_dict.")
+            matching_dict = NULL
+        else:
+            print("[iokit_wrapper_test_helper] matching_dict is NULL, not releasing.")
+            
+    print("[iokit_wrapper_test_helper] trigger_device_scan_and_notify: End")
+    return devices_found

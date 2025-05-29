@@ -7,10 +7,9 @@ import time # For testing/demonstration if needed
 # Import the Cython wrapper
 from src import iokit_wrapper # Assuming iokit_wrapper.pyx is compiled into src package
 
-# Define OAK-D Lite's Vendor ID and Product ID (Placeholders)
-# These should be actual values for OAK-D Lite.
-OAK_D_LITE_VENDOR_ID = 0x03e7  # Example, replace with actual
-OAK_D_LITE_PRODUCT_ID = 0x2485 # Example, replace with actual
+# Define OAK-D Lite's Vendor ID and Product ID
+OAK_D_LITE_VENDOR_ID = 0x03e7
+OAK_D_LITE_PRODUCT_ID = 0x2485
 
 class USBEventHandler:
     """

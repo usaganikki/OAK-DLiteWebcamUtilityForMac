@@ -218,11 +218,19 @@ class TestMenuBarAppCallbacks:
         self.app.device_manager = self.mock_dcm_instance 
 
     def test_show_notification(self):
-        self.app.show_notification("Test Title", "Test Subtitle", "Test Message")
+        # setup_patches で self.mock_rumps_functions.notification.reset_mock() が
+        # 呼ばれていることを確認済み。
+        with patch('src.menu_bar_app.rumps.notification', self.mock_rumps_functions.notification):
+            self.app.show_notification("Test Title", "Test Subtitle", "Test Message")
+        
         self.mock_rumps_functions.notification.assert_called_once_with("Test Title", "Test Subtitle", "Test Message")
 
     def test_show_alert(self):
-        self.app.show_alert("Test Alert Title", "Test Alert Message")
+        # setup_patches で self.mock_rumps_functions.alert.reset_mock() が
+        # 呼ばれていることを確認済み。
+        with patch('src.menu_bar_app.rumps.alert', self.mock_rumps_functions.alert):
+            self.app.show_alert("Test Alert Title", "Test Alert Message")
+        
         self.mock_rumps_functions.alert.assert_called_once_with("Test Alert Title", "Test Alert Message")
 
     def test_update_auto_mode_menu_state(self):
